@@ -1,3 +1,4 @@
+import { stableMemoryId } from './import';
 import { handleMcp } from './mcp';
 import { rankEvidence, type Evidence } from './relevance';
 import { handleUi } from './ui';
@@ -48,6 +49,29 @@ const worker = {
     if(!env.DB)return err('Database binding missing',503);
     if(path==='/mcp')return handleMcp(request,env);
     try{
+      if(path==='/v1/import' && method==='POST'){
+        const raw=await request.text();
+        if(raw.length>150000)return err('Import too large',413);
+        let payload:unknown;
+        try{payload=JSON.parse(raw)}catch{return err('Invalid JSON',400)}
+        if(!payload||typeof payload!=='object'||Array.isArray(payload))return err('Expected items array',400);
+        const items=(payload as Record<string,unknown>).items;
+        if(!Array.isArray(items)||items.length<1||items.length>25)return err('Import must have 1–25 records',400);
+        const validated=[];
+        for(const item of items){
+          const v=validateMemoryInput(item);
+          if(!v.ok)return err('Invalid record: '+v.error,400);
+          validated.push(v.value);
+        }
+        const date=now(),statements:D1PreparedStatement[]=[];
+        for(const item of validated){
+          const id=await stableMemoryId(item);
+          statements.push(env.DB.prepare("INSERT OR IGNORE INTO memories (id,title,body,category,source,created_at,updated_at) VALUES (?,?,?,?,?,?,?)").bind(id,item.title,item.body,item.category,item.source,date,date));
+          statements.push(env.DB.prepare("INSERT INTO memory_revisions (id,memory_id,title,body,category,source,changed_at,action) SELECT ?,id,title,body,category,source,?,'create' FROM memories WHERE id=? AND NOT EXISTS (SELECT 1 FROM memory_revisions WHERE memory_id=?)").bind(crypto.randomUUID(),date,id,id));
+        }
+        await env.DB.batch(statements);
+        return json({received:validated.length,status:'imported_or_already_present'});
+      }
       if(path==='/v1/resume-context' && method==='POST'){
         const payload=await parseJson(request);
         if(!payload||typeof payload!=='object'||Array.isArray(payload))return err('Expected job description',400);
