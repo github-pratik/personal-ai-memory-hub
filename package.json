@@ -11,9 +11,10 @@
     "check": "npm run typecheck && npm test"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20261001.0",
-    "typescript": "^5.9.3",
-    "tsx": "^4.20.6",
-    "wrangler": "^4.45.0"
+    "@cloudflare/workers-types": "latest",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.0",
+    "tsx": "^4.20.0",
+    "wrangler": "^4.0.0"
   }
 }
