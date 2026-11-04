@@ -66,6 +66,7 @@ Our $0/month goal assumes workloads remain within provider free-tier allowances;
 - [Remote MCP protocol](docs/MCP.md)
 - [Security model](docs/SECURITY.md)
 - [Agent development instructions](AGENTS.md)
+- [Cloudflare agent skills and management MCP](docs/CLOUDFLARE_AGENT_TOOLS.md)
 - [Issues and roadmap](https://github.com/github-pratik/personal-ai-memory-hub/issues)
 
 ## Security and limitations
