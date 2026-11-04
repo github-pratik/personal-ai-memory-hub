@@ -41,6 +41,7 @@ function dashboard(memories:Row[],proposals:Row[],q:string):Response{
  <section class="search card"><h2>Search verified memories</h2><form action="/" method="get" class="row"><input name="q" placeholder="Try Python, Slack, PostgreSQL or a job requirement" value="${e(q)}" maxlength="200"><button>Search</button></form></section>
  <div class="grid"><section class="card"><div class="row spaced"><h2>Verified memories (${memories.length})</h2><span class="tag">Approved</span></div>${memoryList}</section>
  <section><div class="card"><h2>Add verified experience</h2><p class="muted">Only enter facts you can support. AI agents should submit proposals instead.</p><form action="/ui/memories" method="post"><label>Title</label><input name="title" maxlength="160" required placeholder="IndustrialBriefs Slack integration"><label>Category</label><select name="category"><option value="project">Project</option><option value="experience">Experience</option><option value="skill">Skill</option><option value="education">Education</option><option value="preference">Preference</option><option value="other">Other</option></select><label>Details</label><textarea name="body" maxlength="12000" required placeholder="What you built, why, how, and what it achieved"></textarea><label>Evidence source</label><input name="source" maxlength="500" required placeholder="Personal confirmation / GitHub commit / reference"><p><button>Add memory</button></p></form></div>
+ <div class="card" style="margin-top:20px"><h2>Bulk import career records</h2><p class="muted">Paste a JSON array of verified facts. This stays in your private database and is not published to GitHub. Maximum 25 at a time.</p><form action="/ui/import" method="post"><label>JSON memory records</label><textarea name="records" maxlength="150000" placeholder='[{"title":"Example project","body":"What you built","category":"project","source":"Personal confirmation"}]' required></textarea><p><button class="secondary" type="submit">Import memories</button></p></form></div>
  <div class="card" style="margin-top:20px"><h2>Proposed memories (${proposals.length})</h2><p class="muted">Review facts before AI suggestions become trusted memory.</p>${proposalList}</div></section></div>`);
 }
 async function records(db:D1Database,table:string):Promise<unknown[]>{
@@ -76,6 +77,13 @@ export async function handleUi(request:Request,env:Env,internal:InternalApi):Pro
      const data=JSON.stringify({version:1,exported_at:new Date().toISOString(),memories,revisions,proposals},null,2);
      return new Response(data,{headers:{'content-type':'application/json; charset=utf-8','content-disposition':'attachment; filename="personal-ai-memory-backup.json"','cache-control':'no-store','x-content-type-options':'nosniff'}});
    }catch{return simpleError('Export failed',500)}
+ }
+ if(path==='/ui/import'&&method==='POST'){
+   const form=await request.formData();
+   let records:unknown;
+   try{records=JSON.parse(String(form.get('records')||''))}catch{return simpleError('Invalid JSON import',400)}
+   const response=await internal('/v1/import','POST',{items:records});
+   return response.ok?redirect('/'):simpleError('Memory import failed; check records and categories',response.status);
  }
  if(path==='/ui/job-match'&&method==='POST'){
    const form=await request.formData(),job=String(form.get('job_description')||'');
