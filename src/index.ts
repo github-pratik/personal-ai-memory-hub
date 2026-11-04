@@ -1,4 +1,4 @@
-import { stableMemoryId } from './import';
+import { stableMemoryId, proposalMemoryId } from './import';
 import { handleMcp } from './mcp';
 import { rankEvidence, type Evidence } from './relevance';
 import { handleUi } from './ui';
@@ -153,14 +153,15 @@ const worker = {
           const result=await env.DB.prepare("UPDATE memory_proposals SET status='rejected',decided_at=? WHERE id=? AND status='pending'").bind(date,proposalId).run();
           return result.meta.changes===1?json({id:proposalId,status:'rejected'}):err('Already decided',409);
         }
-        const id=crypto.randomUUID();
-        await env.DB.batch([
-          env.DB.prepare("UPDATE memory_proposals SET status='approved',decided_at=?,accepted_memory_id=? WHERE id=? AND status='pending'").bind(date,id,proposalId),
-          env.DB.prepare("INSERT INTO memories (id,title,body,category,source,created_at,updated_at) SELECT ?,title,body,category,source,?,? FROM memory_proposals WHERE id=? AND status='approved' AND accepted_memory_id=?").bind(id,date,date,proposalId,id),
-          env.DB.prepare("INSERT INTO memory_revisions (id,memory_id,title,body,category,source,changed_at,action) SELECT ?,id,title,body,category,source,?,'create' FROM memories WHERE id=?").bind(crypto.randomUUID(),date,id)
+        // Insert the memory BEFORE linking the proposal to it, preserving the foreign key.
+        // A deterministic ID makes concurrent approval attempts idempotent.
+        const id=await proposalMemoryId(proposalId);
+        const batch=await env.DB.batch([
+          env.DB.prepare("INSERT OR IGNORE INTO memories (id,title,body,category,source,created_at,updated_at) SELECT ?,title,body,category,source,?,? FROM memory_proposals WHERE id=? AND status='pending'").bind(id,date,date,proposalId),
+          env.DB.prepare("UPDATE memory_proposals SET status='approved',decided_at=?,accepted_memory_id=? WHERE id=? AND status='pending' AND EXISTS (SELECT 1 FROM memories WHERE id=?)").bind(date,id,proposalId,id),
+          env.DB.prepare("INSERT INTO memory_revisions (id,memory_id,title,body,category,source,changed_at,action) SELECT ?,id,title,body,category,source,?,'create' FROM memories WHERE id=? AND NOT EXISTS (SELECT 1 FROM memory_revisions WHERE memory_id=?)").bind(crypto.randomUUID(),date,id,id)
         ]);
-        const saved=await env.DB.prepare('SELECT accepted_memory_id FROM memory_proposals WHERE id=?').bind(proposalId).first<{accepted_memory_id:string|null}>();
-        return saved?.accepted_memory_id===id?json({id:proposalId,status:'approved',memory_id:id}):err('Already decided',409);
+        return batch[1].meta.changes===1?json({id:proposalId,status:'approved',memory_id:id}):err('Already decided',409);
       }
       return err('Not found',404);
     }catch(e){
