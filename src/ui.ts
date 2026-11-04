@@ -41,7 +41,7 @@ function dashboard(memories:Row[],proposals:Row[],q:string):Response{
  <section class="search card"><h2>Search verified memories</h2><form action="/" method="get" class="row"><input name="q" placeholder="Try Python, Slack, PostgreSQL or a job requirement" value="${e(q)}" maxlength="200"><button>Search</button></form></section>
  <div class="grid"><section class="card"><div class="row spaced"><h2>Verified memories (${memories.length})</h2><span class="tag">Approved</span></div>${memoryList}</section>
  <section><div class="card"><h2>Add verified experience</h2><p class="muted">Only enter facts you can support. AI agents should submit proposals instead.</p><form action="/ui/memories" method="post"><label>Title</label><input name="title" maxlength="160" required placeholder="IndustrialBriefs Slack integration"><label>Category</label><select name="category"><option value="project">Project</option><option value="experience">Experience</option><option value="skill">Skill</option><option value="education">Education</option><option value="preference">Preference</option><option value="other">Other</option></select><label>Details</label><textarea name="body" maxlength="12000" required placeholder="What you built, why, how, and what it achieved"></textarea><label>Evidence source</label><input name="source" maxlength="500" required placeholder="Personal confirmation / GitHub commit / reference"><p><button>Add memory</button></p></form></div>
- <div class="card" style="margin-top:20px"><h2>Bulk import career records</h2><p class="muted">Paste a JSON array of verified facts. This stays in your private database and is not published to GitHub. Maximum 25 at a time.</p><form action="/ui/import" method="post"><label>JSON memory records</label><textarea name="records" maxlength="150000" placeholder='[{"title":"Example project","body":"What you built","category":"project","source":"Personal confirmation"}]' required></textarea><p><button class="secondary" type="submit">Import memories</button></p></form></div>
+ <div class="card" style="margin-top:20px"><h2>Bulk import career records</h2><p class="muted">Paste a JSON array of verified facts. This stays in your private database and is not published to GitHub. Maximum 25 at a time.</p><form action="/ui/import" method="post" enctype="multipart/form-data"><label>Optional backup JSON file</label><input type="file" name="file" accept=".json,application/json"><label>Or paste JSON memory records</label><textarea name="records" maxlength="150000" placeholder='[{"title":"Example project","body":"What you built","category":"project","source":"Personal confirmation"}]' required></textarea><p><button class="secondary" type="submit">Import memories</button></p></form></div>
  <div class="card" style="margin-top:20px"><h2>Proposed memories (${proposals.length})</h2><p class="muted">Review facts before AI suggestions become trusted memory.</p>${proposalList}</div></section></div>`);
 }
 async function records(db:D1Database,table:string):Promise<unknown[]>{
@@ -80,10 +80,26 @@ export async function handleUi(request:Request,env:Env,internal:InternalApi):Pro
  }
  if(path==='/ui/import'&&method==='POST'){
    const form=await request.formData();
+   const file=form.get('file');
+   let raw=String(form.get('records')||'');
+   if(file&&typeof file!=='string'&&file.size>0){
+     if(file.size>1000000)return simpleError('Backup too large',413);
+     raw=await file.text();
+   }
+   if(raw.length>1000000)return simpleError('Import too large',413);
+   let data:unknown;
+   try{data=JSON.parse(raw)}catch{return simpleError('Invalid JSON import',400)}
    let records:unknown;
-   try{records=JSON.parse(String(form.get('records')||''))}catch{return simpleError('Invalid JSON import',400)}
-   const response=await internal('/v1/import','POST',{items:records});
-   return response.ok?redirect('/'):simpleError('Memory import failed; check records and categories',response.status);
+   if(Array.isArray(data))records=data;
+   else if(data&&typeof data==='object'&&!Array.isArray(data)&&Array.isArray((data as Record<string,unknown>).memories)){
+     records=((data as {memories:Array<Record<string,unknown>>}).memories).filter(m=>m&&m.state==='approved');
+   }
+   if(!Array.isArray(records)||records.length<1||records.length>500)return simpleError('Expected 1–500 approved memory records',400);
+   for(let i=0;i<records.length;i+=25){
+     const response=await internal('/v1/import','POST',{items:records.slice(i,i+25)});
+     if(!response.ok)return simpleError('Import interrupted. Existing records are not duplicated; retry after checking the source.',response.status);
+   }
+   return redirect('/');
  }
  if(path==='/ui/job-match'&&method==='POST'){
    const form=await request.formData(),job=String(form.get('job_description')||'');
