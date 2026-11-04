@@ -9,7 +9,7 @@ test('health check reveals no personal data', async()=>{
  const response=await worker.fetch(new Request('https://example.test/health'),env);
  assert.equal(response.status,200);
  assert.equal(response.headers.get('cache-control'),'no-store');
- assert.deepEqual(await response.json(),{status:'ok',service:'personal-ai-memory-hub',version:'0.1.0'});
+ assert.deepEqual(await response.json(),{status:'ok',service:'personal-ai-memory-hub',version:'0.2.0'});
 });
 test('anonymous memory requests fail closed',async()=>{
  for(const path of ['/v1/memories','/v1/proposals','/v1/memories/530bbc97-9769-4d4e-8e35-091817cbff45']){
