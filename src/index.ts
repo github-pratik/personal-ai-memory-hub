@@ -20,7 +20,7 @@ function roleOf(header:string|null,env:Env):Role|null{
 }
 function allowed(role:Role,method:string,path:string):boolean{
   if(role==='owner')return true;
-  if(method==='POST' && (path==='/v1/proposals'||path==='/v1/resume-context'))return true;
+  if(method==='POST' && (path==='/v1/proposals'||path==='/v1/resume-context'||path==='/mcp'))return true;
   if(method==='GET' && (path==='/v1/memories'||/^\/v1\/memories\/[^/]+$/.test(path)))return true;
   return false;
 }
