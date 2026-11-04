@@ -73,6 +73,17 @@ assert.ok(cookie?.startsWith('pamh_session='));
 const dashboard=await fetch(base+'/',{headers:{cookie}});
 assert.equal(dashboard.status,200);
 assert.match(await dashboard.text(),/Match experience to a job description/);
+// Owner dashboard supports job matching and private backup restoration.
+const jobMatch=await fetch(base+'/ui/job-match',{method:'POST',redirect:'manual',headers:{origin:base,cookie,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({job_description:'Python APIs and database integrations for logistics workflows'})});
+assert.equal(jobMatch.status,200);
+assert.match(await jobMatch.text(),/Relevant career evidence/);
+const backupFixture={version:1,memories:[{title:'Verified test restoration',body:'Restored approved fact from an encrypted personal backup',category:'project',source:'Synthetic backup test',state:'approved'}]};
+const upload=new FormData();
+upload.set('file',new Blob([JSON.stringify(backupFixture)],{type:'application/json'}),'backup.json');
+const restored=await fetch(base+'/ui/import',{method:'POST',redirect:'manual',headers:{origin:base,cookie},body:upload});
+assert.equal(restored.status,303);
+const foundRestored=await request('/v1/memories?q=Verified test restoration');
+assert.equal(foundRestored.data.items.length,1);
 const exportRes=await fetch(base+'/export',{headers:{cookie}});
 assert.equal(exportRes.status,200);
 const backup=await exportRes.json();
