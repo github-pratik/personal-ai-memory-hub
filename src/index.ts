@@ -1,3 +1,4 @@
+import { handleUi } from './ui';
 import { authorized, safeLimit, validateMemoryInput, validId } from './domain';
 
 interface Env { DB: D1Database; MEMORY_API_TOKEN: string; MEMORY_AGENT_TOKEN?: string }
@@ -27,9 +28,17 @@ async function parseJson(request:Request):Promise<unknown>{
   if(text.length>16000)throw new Error('Request too large');
   return JSON.parse(text);
 }
-export default {
+const worker = {
   async fetch(request:Request,env:Env):Promise<Response>{
     const url=new URL(request.url),path=url.pathname,method=request.method;
+    if(path==='/'||path==='/login'||path==='/logout'||path==='/export'||path.startsWith('/ui/')){
+      const result=await handleUi(request,env,(target,action,body)=>worker.fetch(new Request(new URL(target,url),{
+        method:action,
+        headers:{authorization:'Bearer '+env.MEMORY_API_TOKEN,...(body?{'content-type':'application/json'}:{})},
+        body:body?JSON.stringify(body):undefined
+      }),env));
+      if(result)return result;
+    }
     if(path==='/health' && method==='GET')return json({status:'ok',service:'personal-ai-memory-hub',version:'0.2.0'});
     const role=roleOf(request.headers.get('authorization'),env);
     if(!role)return err('Unauthorized',401);
@@ -126,3 +135,5 @@ export default {
     }
   }
 };
+
+export default worker;
