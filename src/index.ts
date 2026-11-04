@@ -1,3 +1,4 @@
+import { handleMcp } from './mcp';
 import { rankEvidence, type Evidence } from './relevance';
 import { handleUi } from './ui';
 import { authorized, safeLimit, validateMemoryInput, validId } from './domain';
@@ -45,6 +46,7 @@ const worker = {
     if(!role)return err('Unauthorized',401);
     if(!allowed(role,method,path))return err('Forbidden',403);
     if(!env.DB)return err('Database binding missing',503);
+    if(path==='/mcp')return handleMcp(request,env);
     try{
       if(path==='/v1/resume-context' && method==='POST'){
         const payload=await parseJson(request);
