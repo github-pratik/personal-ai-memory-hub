@@ -1,3 +1,4 @@
+import { rankEvidence, type Evidence } from './relevance';
 import { handleUi } from './ui';
 import { authorized, safeLimit, validateMemoryInput, validId } from './domain';
 
@@ -17,7 +18,7 @@ function roleOf(header:string|null,env:Env):Role|null{
 }
 function allowed(role:Role,method:string,path:string):boolean{
   if(role==='owner')return true;
-  if(method==='POST' && path==='/v1/proposals')return true;
+  if(method==='POST' && (path==='/v1/proposals'||path==='/v1/resume-context'))return true;
   if(method==='GET' && (path==='/v1/memories'||/^\/v1\/memories\/[^/]+$/.test(path)))return true;
   return false;
 }
@@ -45,6 +46,14 @@ const worker = {
     if(!allowed(role,method,path))return err('Forbidden',403);
     if(!env.DB)return err('Database binding missing',503);
     try{
+      if(path==='/v1/resume-context' && method==='POST'){
+        const payload=await parseJson(request);
+        if(!payload||typeof payload!=='object'||Array.isArray(payload))return err('Expected job description',400);
+        const job=(payload as Record<string,unknown>).job_description;
+        if(typeof job!=='string'||job.trim().length<15||job.length>12000)return err('Job description must be 15–12000 characters',400);
+        const results=await env.DB.prepare("SELECT id,title,body,category,source,updated_at FROM memories WHERE state='approved' ORDER BY updated_at DESC LIMIT 500").all<Evidence>();
+        return json({matches:rankEvidence(results.results,job),searched:results.results.length,method:'keyword-overlap',notice:'Evidence relevance is heuristic; verify claims before adding to a resume.'});
+      }
       if(path==='/v1/memories' && method==='GET'){
         const limit=safeLimit(url.searchParams.get('limit')),q=(url.searchParams.get('q')||'').trim(),category=url.searchParams.get('category');
         if(q.length>200)return err('Query too long',400);
