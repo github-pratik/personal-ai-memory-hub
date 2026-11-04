@@ -40,6 +40,28 @@ result=await request('/v1/memories/'+memoryId,'DELETE');
 assert.equal(result.res.status,200);
 result=await request('/v1/memories/'+memoryId);
 assert.equal(result.res.status,404);
+// Owner-only bulk import stays idempotent.
+const bulk=[
+ {title:'Python API ownership',body:'Built Python REST API integrations for a business workflow',category:'experience',source:'Synthetic private fixture'},
+ {title:'Cloud deployment',body:'Configured test data storage for a Worker',category:'project',source:'Synthetic private fixture'}
+];
+result=await request('/v1/import','POST',{items:bulk});
+assert.equal(result.res.status,200);
+result=await request('/v1/import','POST',{items:bulk});
+assert.equal(result.res.status,200);
+result=await request('/v1/memories?q=Python API ownership');
+assert.equal(result.data.items.length,1);
+// MCP interoperability basics: initialize, list tools, search.
+const mcp=async (method,params)=>fetch(base+'/mcp',{method:'POST',headers:{...auth(agent),'content-type':'application/json','accept':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})});
+const initialized=await mcp('initialize',{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'smoke',version:'1'}});
+assert.equal(initialized.status,200);
+assert.equal((await initialized.json()).result.serverInfo.name,'personal-ai-memory-hub');
+const tools=await mcp('tools/list');
+assert.equal(tools.status,200);
+assert.ok((await tools.json()).result.tools.some(t=>t.name==='match_job'));
+const searched=await mcp('tools/call',{name:'search_memory',arguments:{query:'Python'}});
+assert.equal(searched.status,200);
+assert.match(JSON.stringify(await searched.json()),/Python API ownership/);
 const homepage=await fetch(base+'/');
 assert.equal(homepage.status,200);
 assert.match(await homepage.text(),/Private access key/);
