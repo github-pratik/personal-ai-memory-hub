@@ -16,3 +16,11 @@ jobs:
       - run: npm run check
       - run: npx wrangler d1 migrations apply memory-hub --local
       - run: npx wrangler d1 execute memory-hub --local --command "SELECT count(*) AS tables_found FROM sqlite_master WHERE type='table' AND name IN ('memories','memory_proposals','memory_revisions');"
+      - name: End-to-end Worker smoke test
+        run: |
+          npx wrangler dev --local --port 8787 \
+            --var MEMORY_API_TOKEN:ci_owner_access_key_minimum_40_random_chars_123456 \
+            --var MEMORY_AGENT_TOKEN:ci_agent_access_key_minimum_40_random_chars_abcdef > wrangler.log 2>&1 &
+          PID=$!
+          trap 'kill $PID 2>/dev/null || true' EXIT
+          node tests/smoke.mjs || (cat wrangler.log && exit 1)
