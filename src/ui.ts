@@ -37,6 +37,7 @@ function dashboard(memories:Row[],proposals:Row[],q:string):Response{
  const memoryList=memories.map(r=>card(r)).join('')||'<p class="muted">No matching memories yet. Add verified evidence below.</p>';
  const proposalList=proposals.map(r=>card(r,true)).join('')||'<p class="muted">No pending proposals.</p>';
  return page(`<header><div><h1>Personal AI Memory Hub</h1><small>Career evidence and project history · private workspace</small></div><div class="row"><a class="button secondary" href="/export">Export backup</a><form action="/logout" method="post"><button class="secondary">Sign out</button></form></div></header>
+ <section class="card" style="margin-bottom:20px"><h2>Match experience to a job description</h2><p class="muted">Paste a job description to rank verified experience and projects without paid AI calls. Nothing is saved.</p><form method="post" action="/ui/job-match"><label>Job description</label><textarea name="job_description" required minlength="15" maxlength="12000" placeholder="Paste the role requirements here"></textarea><p><button>Find matching experience</button></p></form></section>
  <section class="search card"><h2>Search verified memories</h2><form action="/" method="get" class="row"><input name="q" placeholder="Try Python, Slack, PostgreSQL or a job requirement" value="${e(q)}" maxlength="200"><button>Search</button></form></section>
  <div class="grid"><section class="card"><div class="row spaced"><h2>Verified memories (${memories.length})</h2><span class="tag">Approved</span></div>${memoryList}</section>
  <section><div class="card"><h2>Add verified experience</h2><p class="muted">Only enter facts you can support. AI agents should submit proposals instead.</p><form action="/ui/memories" method="post"><label>Title</label><input name="title" maxlength="160" required placeholder="IndustrialBriefs Slack integration"><label>Category</label><select name="category"><option value="project">Project</option><option value="experience">Experience</option><option value="skill">Skill</option><option value="education">Education</option><option value="preference">Preference</option><option value="other">Other</option></select><label>Details</label><textarea name="body" maxlength="12000" required placeholder="What you built, why, how, and what it achieved"></textarea><label>Evidence source</label><input name="source" maxlength="500" required placeholder="Personal confirmation / GitHub commit / reference"><p><button>Add memory</button></p></form></div>
@@ -75,6 +76,14 @@ export async function handleUi(request:Request,env:Env,internal:InternalApi):Pro
      const data=JSON.stringify({version:1,exported_at:new Date().toISOString(),memories,revisions,proposals},null,2);
      return new Response(data,{headers:{'content-type':'application/json; charset=utf-8','content-disposition':'attachment; filename="personal-ai-memory-backup.json"','cache-control':'no-store','x-content-type-options':'nosniff'}});
    }catch{return simpleError('Export failed',500)}
+ }
+ if(path==='/ui/job-match'&&method==='POST'){
+   const form=await request.formData(),job=String(form.get('job_description')||'');
+   const response=await internal('/v1/resume-context','POST',{job_description:job});
+   if(!response.ok)return simpleError('Could not match job description',response.status);
+   const result=await response.json() as {matches:Array<Row & {score:number;matched_keywords:string[]}>;searched:number};
+   const cards=result.matches.map(r=>'<article class="item"><div class="row spaced"><h3>'+e(r.title)+'</h3><span class="tag">'+e(r.category)+'</span></div><p class="body">'+e(r.body)+'</p><p><small>Evidence source: '+e(r.source)+'</small></p><small>Matched terms: '+e(r.matched_keywords.join(', '))+'</small></article>').join('');
+   return page('<header><h1>Relevant career evidence</h1><a class="button secondary" href="/">Back to dashboard</a></header><section class="card"><h2>Best matches ('+result.matches.length+')</h2><p class="muted">Ranked from '+result.searched+' approved memories. Matching does not verify a claim; always check the source before using it in a resume.</p>'+(cards||'<p>No matching approved evidence. Add more verified experience first.</p>')+'</section>');
  }
  if(path==='/ui/memories'&&method==='POST'){
    const form=await request.formData();
