@@ -14,3 +14,5 @@ jobs:
           node-version: '22'
       - run: npm install --no-audit --no-fund
       - run: npm run check
+      - run: npx wrangler d1 migrations apply memory-hub --local
+      - run: npx wrangler d1 execute memory-hub --local --command "SELECT count(*) AS tables_found FROM sqlite_master WHERE type='table' AND name IN ('memories','memory_proposals','memory_revisions');"
