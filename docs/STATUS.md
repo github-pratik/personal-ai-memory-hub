@@ -1,27 +1,30 @@
 # Engineering status
 
-Last recorded: 2026-11-04.
+Updated: November 4, 2026.
 
-## Delivered in GitHub repository
-- Public repository initialized, privacy guidance and MIT license.
-- Cloudflare Worker API skeleton: health, protected memories CRUD, draft proposals.
-- D1 SQL migration for memories, revisions and pending proposals.
-- Input validation and basic unit tests.
-- GitHub Actions check pipeline.
-- Developer guide, MVP plan, agent operating instructions and security risks.
-- Issue-based milestone backlog.
+## Implemented in repository
+- Browser dashboard (signed HttpOnly cookie sessions, origin-checked forms).
+- Memory create, search, update, archive with D1 revisions.
+- Bulk verified-memory import (up to 25 per request, deterministic IDs).
+- AI-suggested proposal queue, owner approve/reject actions.
+- Job-description matching against approved experience/projects (free deterministic ranking).
+- Private JSON backup export.
+- Read-only remote MCP protocol endpoint (Bearer auth, three retrieval tools).
+- Role separation for owner versus agent tokens.
+- D1 migrations and unit/API/end-to-end smoke tests in GitHub Actions.
+- Manual Cloudflare deployment workflow, public source, MIT license, GitHub issue backlog.
 
 ## Verification
-- GitHub writes succeeded.
-- CI validation is in progress; check the Actions tab before treating the foundation as passing.
-- No cloud database, API deployment, dashboard, OAuth, remote MCP or end-user account is provisioned.
+- CI includes TypeScript checks, tests, D1 local migrations and Worker HTTP smoke tests.
+- **Check the latest GitHub Actions run for its actual result.**
+- No remote deployment performed. No Cloudflare credentials or real personal data have been committed.
 
-## Open gates
-- Full CI pass and integration tests.
-- Approval workflow and revision consistency.
-- Authentication hardening and production security review.
-- Cloudflare account authorization, D1 setup and quota protections.
-- Cross-client compatibility tests.
+## Still required for production use
+- Cloudflare account connection, D1 provisioning, owner login secret, deployment.
+- Independent production security review; rate limiting and backup-restoration tests.
+- Client-specific MCP OAuth compatibility.
+- Personal data import through the private dashboard, not through GitHub.
+- Verified end-user tests from two different devices.
 
-## $0 spend policy
-No paid deployments. Avoid adding required paid services; provider free-tier limits can change.
+## Product priority
+Job-application evidence retrieval first. Zero-cost target, accurate professional facts, private data, cross-device operation.
