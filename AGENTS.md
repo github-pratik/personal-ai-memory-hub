@@ -24,3 +24,14 @@ These are task roles, not evidence that separate processes are currently running
 
 ## Definition of done
 Implemented, tested, reviewed, documented and linked to an issue. Mark blocked when credentials or account permissions are required.
+
+## Cloudflare engineering tools
+
+Cloudflare-maintained skills are installed in `.agents/skills/`:
+- `wrangler` for Workers and D1 development/deployment;
+- `workers-best-practices` for secure and reliable Cloudflare Workers;
+- `agents-sdk` as optional guidance only (do not add Agents SDK unless justified).
+
+Before changing Worker infrastructure, load the relevant skill and consult official Cloudflare docs. This project already uses `wrangler.jsonc`, so follow the Wrangler skill instead of migrating to a different CLI without approval.
+
+The official Cloudflare management MCP endpoint is configured in `.mcp.json` at `https://mcp.cloudflare.com/mcp`. **It requires explicit Cloudflare OAuth authorization in a compatible execution client and is separate from our app's own `/mcp` endpoint.** No agent may infer account access merely because the config file exists. See [docs/CLOUDFLARE_AGENT_TOOLS.md](docs/CLOUDFLARE_AGENT_TOOLS.md).
