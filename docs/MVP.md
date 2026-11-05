@@ -22,7 +22,7 @@ The private dashboard is a management interface. Resume tailoring is an importan
 2. Signed-session private browser dashboard, memory CRUD/archive and versioning.
 3. Proposed fact approval queue, import and backup export.
 4. Keyword-based resume/job evidence matching.
-5. Authenticated JSON-RPC MCP server with three read-only tools plus a fourth pending-only `propose_memory` tool. Approved memories still require owner action.
+5. Authenticated JSON-RPC MCP server with three read-only tools plus pending-only `propose_memory` and `propose_memory_update` tools. Approved memories still require owner action.
 6. Tests, CI, and manual Cloudflare deployment.
 
 ## Current milestone: client interoperability
@@ -31,7 +31,7 @@ The private dashboard is a management interface. Resume tailoring is an importan
 - Verify `initialize`, `tools/list`, `tools/call` on hosted MCP using a real compatible client.
 - Test Grok, Claude, ChatGPT and Gemini individually and document actual auth/transport behavior.
 - Where necessary, implement standards-compliant OAuth, compatibility features and secure scopes.
-- Verify that clients cannot read without authorization or modify approved facts; `propose_memory` may only create pending suggestions.
+- Verify that clients cannot read without authorization or modify approved facts; `propose_memory` and `propose_memory_update` may only create pending suggestions; corrections require owner approval and reject stale revisions.
 - Only then import private personal memories.
 
 ## Explicitly not promised
@@ -41,3 +41,12 @@ Universal provider support, automatic synchronization of proprietary AI-provider
 ## Release gates
 
 Passing CI and successful Worker deployment alone do not establish secure multi-provider integration. Require authenticated end-to-end tests, rejection of unauthorized calls, source integrity, backup recovery, and quota/security review.
+
+## Primary user journeys
+
+- From any compatible AI assistant: record a job application as a pending memory proposal.
+- From any compatible AI assistant: update the status of an existing application using a pending correction proposal.
+- From any compatible AI assistant: propose a correction to a resume guideline or personal project fact, preserving approved history.
+- Owner reviews and approves or rejects suggestions in the dashboard; all assistants subsequently read the same approved result.
+
+See [cross-assistant update examples](CROSS_ASSISTANT_UPDATES.md).
