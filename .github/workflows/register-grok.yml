@@ -1,0 +1,31 @@
+name: Register Grok OAuth client (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Register public PKCE client for Grok web connector
+        shell: bash
+        run: |
+          set -euo pipefail
+          RESPONSE=$(curl --fail-with-body --retry 2 --silent --show-error --max-time 15 \
+            -X POST "https://personal-ai-memory-hub.p-pshpatil.workers.dev/oauth/register" \
+            -H "content-type: application/json" \
+            --data '{"client_name":"Grok Personal Memory Hub","redirect_uris":["https://grok.com/connectors-oauth-exchange-code/"],"token_endpoint_auth_method":"none","grant_types":["authorization_code"],"response_types":["code"]}')
+          RESPONSE="$RESPONSE" python3 - <<'PY'
+          import json,os
+          data=json.loads(os.environ["RESPONSE"])
+          client=data.get("client_id")
+          if not isinstance(client,str) or not client:
+              raise SystemExit("Registration did not return client_id")
+          print("GROK_CLIENT_ID="+client)
+          print("GROK_CALLBACK="+str(data.get("redirect_uris",[""])[0]))
+          print("TOKEN_AUTH_METHOD=none (PKCE S256)")
+          print("CLIENT_SECRET=not required (do not enter owner or agent keys)")
+          PY
