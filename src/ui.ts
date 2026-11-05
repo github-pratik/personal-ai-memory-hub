@@ -4,6 +4,7 @@ import { COOKIE_NAME, getCookie, issueSession, removeSessionHeaders, sessionHead
 interface Env {DB:D1Database;MEMORY_API_TOKEN:string; ACCESS_REQUIRED?:string; ACCESS_ALLOWED_EMAIL?:string}
 type InternalApi=(path:string,method:string,body?:unknown)=>Promise<Response>;
 type Row={id:string;title:string;body:string;category:string;source:string;status?:string;created_at:string;updated_at?:string};
+type UpdateRow=Row & {memory_id:string;target_updated_at:string;original_title?:string;original_body?:string;original_category?:string};
 
 export function escapeHtml(value:unknown):string {
  return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]||ch));
@@ -33,16 +34,25 @@ function card(r:Row,proposal=false):string{
  const actions=proposal?`<div class="row"><form action="/ui/proposals/${e(r.id)}/approve" method="post"><button type="submit">Approve</button></form><form action="/ui/proposals/${e(r.id)}/reject" method="post"><button class="secondary" type="submit">Reject</button></form></div>`:`<form action="/ui/memories/${e(r.id)}/archive" method="post"><button class="secondary" type="submit">Archive</button></form>`;
  return `<article class="item"><div class="row spaced"><h3>${e(r.title)}</h3><span class="tag">${e(r.category)}</span></div><p class="body">${e(r.body)}</p><p class="muted"><small>Source: ${e(r.source)}</small></p>${actions}</article>`;
 }
-function dashboard(memories:Row[],proposals:Row[],q:string,accessMode=false):Response{
+function updateCard(p:UpdateRow):string{
+ return `<article class="item"><div class="row spaced"><h3>Correction: ${e(p.original_title||p.memory_id)}</h3><span class="tag">Pending update</span></div>
+ <p><small>Previously approved:</small></p><p class="body">${e(p.original_body||'[Original memory unavailable]')}</p>
+ <p><small>Proposed replacement:</small></p><p class="body"><strong>${e(p.title)}</strong> (${e(p.category)})<br>${e(p.body)}</p>
+ <p class="muted"><small>Source: ${e(p.source)}</small></p>
+ <div class="row"><form action="/ui/memory-updates/${e(p.id)}/approve" method="post"><button type="submit">Approve correction</button></form><form action="/ui/memory-updates/${e(p.id)}/reject" method="post"><button class="secondary" type="submit">Reject</button></form></div></article>`;
+}
+function dashboard(memories:Row[],proposals:Row[],updates:UpdateRow[],q:string,accessMode=false):Response{
  const memoryList=memories.map(r=>card(r)).join('')||'<p class="muted">No matching memories yet. Add verified evidence below.</p>';
  const proposalList=proposals.map(r=>card(r,true)).join('')||'<p class="muted">No pending proposals.</p>';
+ const updateList=updates.map(updateCard).join('')||'<p class="muted">No pending corrections.</p>';
  return page(`<header><div><h1>Personal AI Memory Hub</h1><small>Career evidence and project history · private workspace</small></div><div class="row"><a class="button secondary" href="/export">Export backup</a>${accessMode?'<a class="button secondary" href="/cdn-cgi/access/logout">Sign out</a>':'<form action="/logout" method="post"><button class="secondary">Sign out</button></form>'}</div></header>
  <section class="card" style="margin-bottom:20px"><h2>Match experience to a job description</h2><p class="muted">Paste a job description to rank verified experience and projects without paid AI calls. Nothing is saved.</p><form method="post" action="/ui/job-match"><label>Job description</label><textarea name="job_description" required minlength="15" maxlength="12000" placeholder="Paste the role requirements here"></textarea><p><button>Find matching experience</button></p></form></section>
  <section class="search card"><h2>Search verified memories</h2><form action="/" method="get" class="row"><input name="q" placeholder="Try Python, Slack, PostgreSQL or a job requirement" value="${e(q)}" maxlength="200"><button>Search</button></form></section>
  <div class="grid"><section class="card"><div class="row spaced"><h2>Verified memories (${memories.length})</h2><span class="tag">Approved</span></div>${memoryList}</section>
  <section><div class="card"><h2>Add verified experience</h2><p class="muted">Only enter facts you can support. AI agents should submit proposals instead.</p><form action="/ui/memories" method="post"><label>Title</label><input name="title" maxlength="160" required placeholder="IndustrialBriefs Slack integration"><label>Category</label><select name="category"><option value="project">Project</option><option value="experience">Experience</option><option value="skill">Skill</option><option value="education">Education</option><option value="preference">Preference</option><option value="other">Other</option></select><label>Details</label><textarea name="body" maxlength="12000" required placeholder="What you built, why, how, and what it achieved"></textarea><label>Evidence source</label><input name="source" maxlength="500" required placeholder="Personal confirmation / GitHub commit / reference"><p><button>Add memory</button></p></form></div>
  <div class="card" style="margin-top:20px"><h2>Bulk import career records</h2><p class="muted">Paste a JSON array of verified facts. This stays in your private database and is not published to GitHub. Maximum 25 at a time.</p><form action="/ui/import" method="post" enctype="multipart/form-data"><label>Optional backup JSON file</label><input type="file" name="file" accept=".json,application/json"><label>Or paste JSON memory records</label><textarea name="records" maxlength="150000" placeholder='[{"title":"Example project","body":"What you built","category":"project","source":"Personal confirmation"}]'></textarea><p><button class="secondary" type="submit">Import memories</button></p></form></div>
- <div class="card" style="margin-top:20px"><h2>Proposed memories (${proposals.length})</h2><p class="muted">Review facts before AI suggestions become trusted memory.</p>${proposalList}</div></section></div>`);
+ <div class="card" style="margin-top:20px"><h2>Proposed memories (${proposals.length})</h2><p class="muted">Review new facts before AI suggestions become trusted memory.</p>${proposalList}</div>
+ <div class="card" style="margin-top:20px"><h2>Proposed corrections (${updates.length})</h2><p class="muted">Review the original facts and replacements before approving any changes.</p>${updateList}</div></section></div>`);
 }
 async function records(db:D1Database,table:string):Promise<unknown[]>{
  const all:unknown[]=[];
@@ -123,6 +133,11 @@ export async function handleUi(request:Request,env:Env,internal:InternalApi,acce
    const response=await internal('/v1/proposals/'+decision[1]+'/'+decision[2],'POST');
    return response.ok?redirect('/'):simpleError('Proposal action failed',response.status);
  }
+ const updateDecision=path.match(/^\/ui\/memory-updates\/([^/]+)\/(approve|reject)$/);
+ if(updateDecision&&method==='POST'){
+   const response=await internal('/v1/memory-updates/'+updateDecision[1]+'/'+updateDecision[2],'POST');
+   return response.ok?redirect('/'):simpleError('Correction could not be applied. The original memory may have changed since the proposal.',response.status);
+ }
  const archive=path.match(/^\/ui\/memories\/([^/]+)\/archive$/);
  if(archive&&method==='POST'){
    const response=await internal('/v1/memories/'+archive[1],'DELETE');
@@ -135,7 +150,10 @@ export async function handleUi(request:Request,env:Env,internal:InternalApi,acce
      const sql="SELECT id,title,body,category,source,created_at,updated_at FROM memories WHERE state='approved'"+(q?' AND (instr(lower(title),lower(?))>0 OR instr(lower(body),lower(?))>0)':'')+" ORDER BY updated_at DESC LIMIT 100";
      const mem=await env.DB.prepare(sql).bind(...(q?[q,q]:[])).all<Row>();
      const prop=await env.DB.prepare("SELECT id,title,body,category,source,created_at FROM memory_proposals WHERE status='pending' ORDER BY created_at DESC LIMIT 100").all<Row>();
-     return dashboard(mem.results,prop.results,q,env.ACCESS_REQUIRED==='true');
+     const updates=await env.DB.prepare(`SELECT p.*,m.title AS original_title,m.body AS original_body,m.category AS original_category
+        FROM memory_update_proposals p JOIN memories m ON m.id=p.memory_id
+        WHERE p.status='pending' ORDER BY p.created_at DESC LIMIT 100`).all<UpdateRow>();
+     return dashboard(mem.results,prop.results,updates.results,q,env.ACCESS_REQUIRED==='true');
    }catch{return simpleError('Dashboard unavailable',500)}
  }
  return simpleError('Not found',404);
