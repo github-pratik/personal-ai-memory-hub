@@ -9,7 +9,7 @@ Build a user-controlled, secure, zero-cost-target cross-platform memory hub. The
 3. Run typecheck and tests; do not claim a check passed without evidence.
 4. Protect user data. Fail closed on authentication errors.
 5. Do not make unnecessary infrastructure additions (Redis, agent frameworks, paid LLMs) without benchmarking.
-6. No automatic approval of AI-generated memory facts.
+6. No automatic approval of AI-generated memory facts. The `propose_memory` MCP tool may write **pending proposals only**, after an explicit user request; approved memories always need owner confirmation.
 7. No deployment without a secret, access-control review and quota controls.
 8. Report progress as completed, verified, blocked, next.
 
