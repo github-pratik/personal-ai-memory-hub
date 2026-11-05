@@ -10,7 +10,7 @@ The Memory Hub MCP endpoint is deployed, but a live Grok connection and tool-cal
 https://personal-ai-memory-hub.p-pshpatil.workers.dev/mcp
 ```
 
-No Grok-specific Worker or separate database is necessary. This endpoint already implements `initialize`, `tools/list`, `tools/call`, `ping` and `notifications/initialized`, plus the tools `search_memory`, `get_memory` and `match_job`.
+No Grok-specific Worker or separate database is necessary. This endpoint already implements `initialize`, `tools/list`, `tools/call`, `ping` and `notifications/initialized`, plus the read tools `search_memory`, `get_memory`, `match_job`, and the pending-only `propose_memory` tool after the updated Worker is deployed.
 
 ## Configure securely
 
@@ -19,7 +19,7 @@ No Grok-specific Worker or separate database is necessary. This endpoint already
 3. Visit https://grok.com/connectors → **New Connector → Custom**.
 4. Set the server URL above. Configure authentication as supported by the current Grok connector UI. The Memory Hub currently expects `Authorization: Bearer <MEMORY_AGENT_TOKEN>` on `/mcp`. Do not type the secret into a public GitHub page or paste it into chat.
 5. Discover the tools, and test a **read-only** call. With an empty database, searches should return an empty list, not unrelated or invented personal facts.
-6. Confirm Grok cannot create or approve a memory via MCP. This is intentionally read-only.
+6. Confirm Grok cannot create or approve an **approved** memory via MCP. `propose_memory` can only create an unapproved pending proposal.
 
 **Compatibility note:** Grok supporting *custom MCP* does **not** prove that its hosted connector UI supports the exact fixed Bearer-header authorization used by this MVP. If Grok's offered authentication differs, stop and implement an appropriate OAuth flow or other secure bridge instead of removing API authentication or embedding a token in the URL. A self-hosted MCP client with configurable headers can be used to test the endpoint separately.
 
@@ -30,6 +30,7 @@ No Grok-specific Worker or separate database is necessary. This endpoint already
 - `search_memory` — search owner-approved professional facts by keyword and category.
 - `get_memory` — retrieve a specific approved fact with its source.
 - `match_job` — rank approved evidence for a job description.
+- `propose_memory` — submit a user-requested memory suggestion to owner review; cannot approve it.
 
 All searches read the same Cloudflare D1 database used by the browser dashboard and other assistants.
 
