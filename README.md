@@ -29,7 +29,7 @@ ChatGPT / Claude / Grok / Gemini / compatible MCP clients
 
 - **Worker:** https://personal-ai-memory-hub.p-pshpatil.workers.dev
 - **MCP endpoint:** `https://personal-ai-memory-hub.p-pshpatil.workers.dev/mcp`
-- **Status:** Worker deployed; private browser login and dashboard verified by the owner, GitHub CI green on the login fix. **Claude previously discovered the original three MCP tools and called `search_memory`**, returning `{"items":[]}` with no error (owner-reported live test). The new proposal and correction tools must still be verified by Claude after redeployment; other clients are pending.
+- **Status:** Worker deployed; private browser login and dashboard verified by the owner, GitHub CI green on the login fix. **Claude previously discovered the original three MCP tools and called `search_memory`**, returning `{"items":[]}` with no error (owner-reported live test). Claude has now discovered all five tools and successfully submitted a synthetic `propose_memory` record as `pending` (owner-reported test). Approval/rejection and `propose_memory_update` remain to be verified live; other clients are pending.
 - **Memory database:** empty by choice during integration setup; no production career facts should be published to this repository.
 - **Email OTP:** Cloudflare Access integration code exists, but Access policy and passwordless browser sign-in are **not enabled**. The current login uses a private access key.
 
