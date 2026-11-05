@@ -1,6 +1,8 @@
-# Development setup
+# Development and live deployment setup
 
-Prerequisites: Node.js 22+, npm, a Cloudflare account for future deployment.
+## Local development
+
+Requires Node.js 22+, npm, and Wrangler.
 
 ```bash
 npm install
@@ -9,11 +11,31 @@ npx wrangler d1 migrations apply memory-hub --local
 npm run dev
 ```
 
-Create a local `.dev.vars` from `.env.example` with a newly generated random token of at least 32 characters. **Do not commit it.** Use a local CLI client for authenticated API testing. The dashboard and OAuth are not implemented yet.
+Create a local `.dev.vars` from `.env.example` with `MEMORY_API_TOKEN` set to a **random, at least 32-character secret** (40+ recommended). Never commit secrets. The browser dashboard uses a signed HttpOnly cookie after logging in.
 
-Before remote deployment: create a Cloudflare D1 database, replace the placeholder in `wrangler.jsonc`, configure a secret using `wrangler secret put MEMORY_API_TOKEN`, test migrations, review provider free-tier terms, and complete security review. No production deployment has been performed.
+Public check: `GET /health`. Protected API: `/v1/*`, and `/mcp`.
 
-Health check: `GET /health` (public, returns no private data).
-Protected endpoints: `GET|POST /v1/memories`, `GET|PATCH|DELETE /v1/memories/:id`, and `GET|POST /v1/proposals`. All require `Authorization: Bearer <secret>`.
+## Hosted instance
 
-**Caution:** This is early implementation code, not yet hardened for live public exposure. API input validation and revision history are included; quota control, OAuth, proposal approval workflow, browser UI, MCP and backups are pending.
+- URL: https://personal-ai-memory-hub.p-pshpatil.workers.dev
+- Cloudflare D1 database: `memory-hub`
+- Deployment: GitHub Actions → **Deploy to Cloudflare (manual, free-tier only)** → **Run workflow** on latest `main`
+- Environment: GitHub `production`
+- Required environment secrets: `CLOUDFLARE_API_TOKEN`, `MEMORY_API_TOKEN`
+- Optional separate agent environment secret: `MEMORY_AGENT_TOKEN`
+
+**Important:** `Re-run all jobs` on an older workflow reuses the older commit. To deploy the newest changes, start a new workflow run.
+
+The dashboard login has been tested live. The MCP endpoint exists but no real third-party AI client is verified connected yet.
+
+## Agent integration
+
+Read [MCP.md](MCP.md) and [GROK.md](GROK.md). Keep the owner login key private. If connecting agents, provision a separate restricted agent token. Some clients need an OAuth flow and cannot use fixed Bearer headers.
+
+## Optional email OTP
+
+Cloudflare Access email OTP code support is prepared but **not enabled**. Do not set `ACCESS_REQUIRED=true` without first configuring the Cloudflare Access policy and authorized email. Follow [CLOUDFLARE_ACCESS_OTP.md](CLOUDFLARE_ACCESS_OTP.md).
+
+## Safety
+
+Do not store passwords, tokens, private backups, personal memory content, or employer confidential data in the public repository. Cloudflare's free-tier usage and terms may change.
