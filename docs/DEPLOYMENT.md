@@ -7,14 +7,12 @@ The code is ready to run locally and has an automated, **manual-release** Cloudf
 1. Use a personal Cloudflare account on its free tier; confirm no paid resources are enabled.
 2. In Cloudflare, create a D1 database named `memory-hub`. Copy its database ID.
 3. Create a Cloudflare API token with the minimum permissions required for Workers deployment and D1 migrations. Do **not** post the token in chat, an issue, or a commit.
-4. In GitHub, configure the repository's `production` environment and these **environment variables**:
-   - `CLOUDFLARE_ACCOUNT_ID`
-   - `CLOUDFLARE_D1_DATABASE_ID`
-5. Configure these **GitHub Actions secrets**:
+4. The non-secret Cloudflare Account ID and D1 database ID are already configured in `wrangler.jsonc`. Do not create redundant GitHub Actions variables.
+5. In GitHub, configure the repository's `production` environment and add these **GitHub Actions environment secrets**:
    - `CLOUDFLARE_API_TOKEN`
    - `MEMORY_API_TOKEN`: a randomly generated secret with at least 40 characters; used for private owner login.
    - `MEMORY_AGENT_TOKEN`: optional independent randomly generated secret for read-only memory/MCP access and proposals.
-6. Run **Actions → Deploy to Cloudflare → Run workflow** only after reviewing the linked CI checks and security notes.
+6. Run **Actions → Deploy to Cloudflare → Run workflow** only after reviewing the linked CI checks and security notes. Confirm that the `production` environment has access to the secrets, because the workflow explicitly runs under that environment.
 
 The deployment workflow migrates D1, deploys the Worker and sets Worker secrets. The public `/health` route contains no personal information. The dashboard and private endpoints deny access until authentication is configured.
 
