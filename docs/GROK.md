@@ -6,7 +6,7 @@
 
 1. Open **https://grok.com/connectors** and choose **New Connector → Custom**.
 2. Name: **Pratik Personal Memory**.
-3. Server URL: `https://personal-ai-memory-hub.p-pshpatil.workers.dev/mcp`.
+3. Server URL: `https://personal-ai-memory-hub.p-pshpatil.workers.dev/grok/mcp` (Grok-specific OAuth challenge; keep existing Claude/ChatGPT connectors on `/mcp`).
 4. Choose automatic OAuth discovery/sign-in if the UI offers it. The Worker already publishes protected-resource and OAuth authorization-server discovery metadata, public client registration (DCR), owner consent, PKCE S256 and a token endpoint. These endpoints are deployed, but Grok's compatibility has **not yet been tested**.
 5. If Grok displays an OAuth credentials form demanding **Client ID**, **Authorization Endpoint** and **Token Endpoint** immediately, **do not enter an API token as the Client ID**, invent IDs, or use the owner key. The connector may require a client to be registered before entry. Client registration needs Grok's **exact approved callback/redirect URI**. We must obtain that URI from Grok's setup/docs and register it securely; until then, do not guess it.
 6. After authorization, ask Grok to list available tools and call `search_memory` for `MCP Cross-Assistant Integration`, then `get_memory` on `c6b82a21-761e-842b-845e-1516025adda5`. It should return the approved test memory with title `MCP Cross-Assistant Integration - Verified`.
@@ -40,9 +40,9 @@ The workflow registers **only** `https://grok.com/connectors-oauth-exchange-code
 
 | Field | Deployed value |
 |---|---|
-| MCP URL | `https://personal-ai-memory-hub.p-pshpatil.workers.dev/mcp` |
+| MCP URL for Grok | `https://personal-ai-memory-hub.p-pshpatil.workers.dev/grok/mcp` |
 | Authorization server metadata | `https://personal-ai-memory-hub.p-pshpatil.workers.dev/.well-known/oauth-authorization-server` |
-| Protected resource metadata | `https://personal-ai-memory-hub.p-pshpatil.workers.dev/.well-known/oauth-protected-resource` |
+| Protected resource metadata for Grok | `https://personal-ai-memory-hub.p-pshpatil.workers.dev/.well-known/oauth-protected-resource/grok/mcp` |
 | Authorization Endpoint | `https://personal-ai-memory-hub.p-pshpatil.workers.dev/oauth/authorize` |
 | Token Endpoint | `https://personal-ai-memory-hub.p-pshpatil.workers.dev/oauth/token` |
 | Dynamic Client Registration | `https://personal-ai-memory-hub.p-pshpatil.workers.dev/oauth/register` |
@@ -61,6 +61,12 @@ The OAuth server also accepts Grok's **publicly published OAuth client identifie
 
 To test: deploy the latest `main` manually, disconnect the previously misidentified Grok custom connector, create a new custom connector with the **/grok/mcp** URL, finish owner sign-in/consent, then call `search_memory`. The previous `/mcp` connector may continue to say Connected without authentication; do not reuse it. Live sign-in and readback are **not yet verified**.
 
+
+## Interpreting OAuth diagnostics (November 5, 2026)
+
+A `POST /grok/mcp` HTTP 200 event **alone** does not establish an authentication bypass or prove that Grok tried a protected tool. The JSON-RPC method in the request body matters: an anonymous `tools/list` response can be HTTP 200 while an anonymous `tools/call` must be HTTP 401 with `WWW-Authenticate`. This distinction was verified with live curl probes. Before changing authentication middleware, capture a fresh Grok reconnect attempt with Worker Observability and distinguish discovery from tool invocation. A lack of OAuth events in a short or newly enabled logging window is inconclusive.
+
+Inspect request path, HTTP status, and the sanitized `oauth_flow` stage only. Enable query-string redaction in Worker logging; never log request bodies, authorization headers, codes, PKCE verifiers or owner secrets. If Grok calls only `tools/list` and never calls a protected tool or OAuth metadata endpoint, investigate client-side connector discovery/authorization compatibility rather than weakening server-side authentication. If an unauthenticated `tools/call` ever returns HTTP 200, treat that as a security regression and investigate immediately.
 
 ## Troubleshooting
 
