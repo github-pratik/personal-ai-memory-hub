@@ -1,86 +1,46 @@
 # Shared remote MCP integration
 
-## Purpose
+**Mission:** one private Cloudflare D1 memory database used by multiple AI assistants.
 
-**One private MCP server serves multiple AI assistants.** Never create separate memory databases for ChatGPT, Claude, Grok or Gemini.
+**Endpoint:** `https://personal-ai-memory-hub.p-pshpatil.workers.dev/mcp`
 
-**Live endpoint:**
+## Working integrations (November 5, 2026)
 
-```text
-https://personal-ai-memory-hub.p-pshpatil.workers.dev/mcp
-```
-
-The Worker is deployed. **Claude has been verified by the owner** to discover the original three tools and successfully call `search_memory` with `query: "Python"`; the expected response was `{"items":[]}`. Claude has also discovered all five tools and submitted synthetic proposal `ce7f0252-848a-45f7-a0d5-53acc4bb8e45` with `pending` status. This is an owner-reported integration result, not an independently queried production DB. Other clients have not been verified.
-
-## Current MCP implementation
-
-- HTTPS JSON-RPC endpoint, advertising MCP protocol version `2025-06-18`.
-- Implemented methods: `initialize`, `ping`, `tools/list`, `tools/call`, `notifications/initialized`.
-- Authentication: existing `Authorization: Bearer <MEMORY_AGENT_TOKEN>` or owner credential. A new DCR/OAuth authorization-code + PKCE flow has been added in source but requires a new production deployment before connecting ChatGPT/Grok. **Use the dedicated agent token for external assistants, never the owner key.**
-- Read-only tools:
-  1. `search_memory`: search approved memories by text/category; include evidence source.
-  2. `get_memory`: retrieve an approved record by UUID.
-  3. `match_job`: return evidence ranked against a job description.
-- **Pending proposal only**:
-  4. `propose_memory`: submit a proposed fact containing `title`, `body`, `category`, and `source`, only upon a user's explicit request. The server validates input, labels its source as an AI suggestion, checks the pending queue limit (100), and responds with `status: "pending"` and `requires_owner_approval: true`. It does **not** add an approved memory.
-
-  5. `propose_memory_update`: suggest a complete replacement for an existing approved record identified by `memory_id`. The original `updated_at` version is captured. The owner can approve or reject the correction in the dashboard. Stale corrections fail with a conflict instead of replacing newly edited facts.
-
-An agent's token has narrower permissions than the owner. MCP cannot directly approve, edit, archive or delete approved memories. The owner reviews proposals in the private dashboard, where they can approve or reject them. Pending proposals are not returned by `search_memory` or `get_memory` until approved.
-
-## Client compatibility checklist
-
-| Assistant | Integration target | State |
+| Client | Connection | Live verified behavior |
 |---|---|---|
-| Grok | Custom MCP connector | Not tested yet; [setup](GROK.md) |
-| ChatGPT | Custom MCP integration, subject to account/workspace and auth support | Not tested |
-| Claude | Custom remote MCP connector with restricted `Authorization` request header | **Tool discovery + `search_memory` succeeded (owner-reported)** |
-| Gemini | Compatible MCP runtime/adapter | Not tested |
-| MCP developer client | HTTP with fixed Bearer authorization | Next verification target |
+| Claude | Remote MCP, restricted `Authorization: Bearer …` header | Five tools, search/read, submit new and correction proposals, readback after approval |
+| ChatGPT | Custom Streamable HTTP MCP, restricted `Authorization: Bearer …` header | Five tools, search/read Claude's approved correction, submit a correction, Claude readback after approval |
+| Grok | Custom MCP connector | Not yet connected; see [GROK.md](GROK.md) |
+| Gemini | Compatible MCP client | Not yet tested |
 
-**Do not assume** any web connector accepts an arbitrary fixed `Authorization` header. Hosted clients may require OAuth. Where required, add secure OAuth support rather than exposing the data anonymously or placing secrets in the URL.
+The owner verified cross-platform changes using synthetic approved memory ID `c6b82a21-761e-842b-845e-1516025adda5`. ChatGPT submitted proposal `57b7c291-cc87-4bec-8ad5-148239c1adab`; after owner approval Claude read title `MCP Cross-Assistant Integration - Verified` (2026-11-05T05:42:34.581Z). **This proves owner-approved memory sharing and updates in both directions** for those two clients.
 
-## Safe test plan
+## Tools
 
-1. Add a separate strong `MEMORY_AGENT_TOKEN` to GitHub's `production` environment secrets.
-2. Start a **new** Cloudflare deployment on current `main`. Verify the secret-configuration step succeeded.
-3. Use a trusted MCP client that can set an Authorization Bearer header and test `initialize`, `tools/list`, and `search_memory`.
-4. Empty memory results are expected. Test no-token requests return HTTP 401 and agents cannot mutate approved records.
-5. Continue Claude testing (`match_job`, `propose_memory`, owner-only approval constraints) and validate Grok, ChatGPT, and Gemini **separately**, documenting actual outcomes.
+- `search_memory`: search **approved** memories by text and category.
+- `get_memory`: retrieve one **approved** memory by UUID.
+- `match_job`: heuristic rank of approved evidence for a job description, not independent validation.
+- `propose_memory`: propose a new memory; returns `pending` and `requires_owner_approval:true`.
+- `propose_memory_update`: propose replacing an existing record, retaining its UUID if approved; stale versions are rejected.
 
-Never share tokens or sensitive response payloads in public issues, commit history, or screenshots.
+No MCP tool can approve, reject, archive or directly edit authoritative records. Pending proposals must be reviewed in the owner's private dashboard.
 
-## Known interoperability gaps
+## Authentication
 
-- OAuth discovery, public DCR, owner consent, PKCE, short-lived access tokens and scope/resource checks have been implemented but **not yet live-deployed or hosted-client-verified**. Refresh tokens, revocation UI, CIMD and multi-user isolation are not implemented.
-- Full MCP Streamable HTTP behavior and compatibility with each hosted AI client are not independently proven.
-- Cloudflare Access Email OTP is a **browser-login** option, not a general OAuth replacement for MCP clients.
-- The official Cloudflare **management MCP** in `.mcp.json` is different from our Memory Hub **memory MCP**.
+- Existing Claude and ChatGPT clients currently use a **separate restricted agent Bearer token**, not the master owner secret.
+- OAuth protected resource metadata, authorization-server metadata, dynamic client registration (DCR), browser owner login and consent, PKCE S256 and one-hour audience/scope-bound access tokens are **deployed and locally tested**.
+- Hosted-client OAuth login has **not** been verified. It is not how the two successful integrations authenticated. Grok may need OAuth.
+- Anonymous `initialize`, `ping`, `tools/list` may reveal **tool metadata only** for host discovery. Anonymous tool invocation cannot read or write memory; the server returns an OAuth challenge.
+- An optional `GET /mcp` or `DELETE /mcp` transport probe receives 405 (POST supported); no public SSE stream is exposed.
+- Never put secrets in code, public issues, screenshots, or URL query parameters.
 
-See [Security](SECURITY.md), [Grok setup](GROK.md), [STATUS](STATUS.md).
+## Verification checklist for additional clients
 
-## Verifying the proposal tool safely
+1. Connect to the same public `/mcp` endpoint using the authentication the client supports.
+2. Confirm all five tools are discovered.
+3. Call `search_memory("MCP Cross-Assistant Integration")`, then `get_memory` on ID `c6b82a21-761e-842b-845e-1516025adda5`.
+4. For a write test, explicitly ask the assistant to submit a synthetic `propose_memory_update` against the same UUID; it must return `pending`.
+5. Confirm the approved record is unchanged until the owner approves in the private dashboard. After approval, verify another assistant reads the new text.
+6. Record successes and failures separately for each client.
 
-1. Deploy the newest commit using **a new** GitHub Actions workflow run; rerunning old jobs deploys old source.
-2. In Claude, confirm `propose_memory` appears in the connector's tool list.
-3. Explicitly ask Claude to submit a **clearly synthetic test proposal**, not a real personal fact. Include a source like `Synthetic user test request`.
-4. Confirm the response says `pending` and `requires_owner_approval: true`.
-5. Confirm the proposed memory is **absent** from approved-memory searches but visible in the dashboard's **Proposed memories** section.
-6. Reject the synthetic proposal using the private dashboard. Confirm the approved memory store remains unchanged.
-
-Do not give an AI client your dashboard owner token. The agent may **submit proposals**, but it may not approve them. Model-generated text is an untrusted suggestion until the owner confirms it.
-
-## Job applications and resume guideline updates
-
-Use `search_memory` before proposing a change. Use `propose_memory` for new records and `propose_memory_update` for corrections to the existing record. For now, job applications use category `other` and titles beginning `Job application:`; resume rules use category `preference`. See [cross-assistant updates](CROSS_ASSISTANT_UPDATES.md). These are provisional conventions, not a fully structured application tracking table.
-
-## OAuth metadata (after deployment)
-
-- `GET /.well-known/oauth-protected-resource`: protected MCP resource and issuer.
-- `GET /.well-known/oauth-authorization-server`: OAuth endpoints and supported S256 PKCE/none client auth.
-- `POST /oauth/register`: public-client dynamic registration (DCR).
-- `GET/POST /oauth/authorize`: owner sign-in plus explicit consent and short-lived authorization code.
-- `POST /oauth/token`: single-use authorization-code + PKCE exchange.
-- Scopes: `memory:read` and `memory:propose`. They **never** grant owner-level actions. Access tokens expire after one hour; no refresh token issuance yet.
-
-See [OAuth requirements](OAUTH_REQUIREMENTS.md) and [Security](SECURITY.md). Never use the owner key as an OAuth Client ID.
+See [Grok](GROK.md), [cross-assistant update examples](CROSS_ASSISTANT_UPDATES.md), [OAuth requirements](OAUTH_REQUIREMENTS.md), [Security](SECURITY.md).
