@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 
 const base='http://127.0.0.1:8787';
 const owner='ci_owner_access_key_minimum_40_random_chars_123456';
@@ -196,4 +197,78 @@ const exportRes=await fetch(base+'/export',{headers:{cookie}});
 assert.equal(exportRes.status,200);
 const backup=await exportRes.json();
 assert.ok(Array.isArray(backup.memories)&&Array.isArray(backup.revisions));
+// OAuth 2.1 / PKCE security regression: metadata discovery, registration, explicit
+// owner consent, token audience, single-use authorization code, and legacy Bearer.
+const protectedMetadata=await fetch(base+'/.well-known/oauth-protected-resource');
+assert.equal(protectedMetadata.status,200);
+const protectedDoc=await protectedMetadata.json();
+assert.equal(protectedDoc.resource,base+'/mcp');
+const authMetadata=await fetch(base+'/.well-known/oauth-authorization-server');
+assert.equal(authMetadata.status,200);
+const authDoc=await authMetadata.json();
+assert.equal(authDoc.issuer,base);
+assert.deepEqual(authDoc.code_challenge_methods_supported,['S256']);
+assert.equal(authDoc.token_endpoint_auth_methods_supported[0],'none');
+const unauthorizedMcp=await fetch(base+'/mcp',{method:'POST',headers:{'content-type':'application/json'},body:'{}'});
+assert.equal(unauthorizedMcp.status,401);
+assert.match(unauthorizedMcp.headers.get('www-authenticate')||'',/oauth-protected-resource/);
+const badRegistration=await fetch(base+'/oauth/register',{method:'POST',headers:{'content-type':'application/json'},
+ body:JSON.stringify({redirect_uris:['https://attacker.example/cb#fragment']})});
+assert.equal(badRegistration.status,400);
+const callback='https://chatgpt.com/connector_platform_oauth_redirect';
+const registration=await fetch(base+'/oauth/register',{method:'POST',headers:{'content-type':'application/json'},
+ body:JSON.stringify({client_name:'Synthetic OAuth Client',redirect_uris:[callback],
+ grant_types:['authorization_code'],response_types:['code'],token_endpoint_auth_method:'none'})});
+assert.equal(registration.status,201);
+const registered=await registration.json();
+assert.ok(registered.client_id);
+const verifier='V'.repeat(64);
+const challenge=createHash('sha256').update(verifier).digest('base64url');
+const authQuery=new URLSearchParams({response_type:'code',client_id:registered.client_id,redirect_uri:callback,
+ code_challenge:challenge,code_challenge_method:'S256',state:'a-random-csrf-state',
+ scope:'memory:read memory:propose',resource:base+'/mcp'});
+const authorizationUrl=base+'/oauth/authorize?'+authQuery;
+const startNoCookie=await fetch(authorizationUrl);
+assert.equal(startNoCookie.status,200);
+assert.match(await startNoCookie.text(),/Sign in to your private Memory Hub/);
+const badConsent=await fetch(authorizationUrl,{method:'POST',redirect:'manual',headers:{cookie,origin:'https://evil.example','content-type':'application/x-www-form-urlencoded'},body:'decision=approve'});
+assert.equal(badConsent.status,403);
+const consent=await fetch(authorizationUrl,{headers:{cookie}});
+assert.equal(consent.status,200);
+assert.match(await consent.text(),/Authorize Synthetic OAuth Client/);
+const authorizedOAuth=await fetch(authorizationUrl,{method:'POST',redirect:'manual',
+ headers:{cookie,origin:base,'content-type':'application/x-www-form-urlencoded'},body:'decision=approve'});
+assert.equal(authorizedOAuth.status,303);
+const callbackUrl=new URL(authorizedOAuth.headers.get('location'));
+assert.equal(callbackUrl.origin,'https://chatgpt.com');
+assert.equal(callbackUrl.searchParams.get('iss'),base);
+assert.equal(callbackUrl.searchParams.get('state'),'a-random-csrf-state');
+const authCode=callbackUrl.searchParams.get('code');
+assert.ok(authCode&&authCode.length>30);
+const tokenArgs={grant_type:'authorization_code',client_id:registered.client_id,code:authCode,
+ redirect_uri:callback,code_verifier:verifier,resource:base+'/mcp'};
+const wrongVerifier=await fetch(base+'/oauth/token',{method:'POST',
+ headers:{'content-type':'application/x-www-form-urlencoded'},
+ body:new URLSearchParams({...tokenArgs,code_verifier:'W'.repeat(64)})});
+assert.equal(wrongVerifier.status,400);
+const badAudience=await fetch(base+'/oauth/token',{method:'POST',
+ headers:{'content-type':'application/x-www-form-urlencoded'},
+ body:new URLSearchParams({...tokenArgs,resource:base+'/other'})});
+assert.equal(badAudience.status,400);
+const tokenResponse=await fetch(base+'/oauth/token',{method:'POST',
+ headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams(tokenArgs)});
+assert.equal(tokenResponse.status,200);
+const accessToken=(await tokenResponse.clone().json()).access_token;
+assert.ok(accessToken&&accessToken.length>30);
+const replay=await fetch(base+'/oauth/token',{method:'POST',
+ headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams(tokenArgs)});
+assert.equal(replay.status,400);
+const oauthMcp=await fetch(base+'/mcp',{method:'POST',headers:{authorization:'Bearer '+accessToken,'content-type':'application/json'},
+ body:JSON.stringify({jsonrpc:'2.0',id:42,method:'tools/list'})});
+assert.equal(oauthMcp.status,200);
+assert.equal((await oauthMcp.json()).result.tools.length,5);
+const oauthCannotApprove=await fetch(base+'/v1/memory-updates/'+proposedCorrection.id+'/approve',{
+ method:'POST',headers:{authorization:'Bearer '+accessToken}});
+assert.equal(oauthCannotApprove.status,401);
+
 console.log('End-to-end smoke test passed: auth, memories, evidence match, approvals, browser, export.');
