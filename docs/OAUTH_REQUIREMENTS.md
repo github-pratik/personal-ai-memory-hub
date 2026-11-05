@@ -51,3 +51,7 @@ A user can connect multiple AI assistants to **one private memory database** and
 - [OpenAI authentication guide](https://developers.openai.com/plugins/build/auth)
 - [MCP authorization specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
 - [ChatGPT custom MCP connection instructions](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt)
+
+## ChatGPT discovery and linking compatibility regression
+
+An MCP host may require anonymous `initialize` and `tools/list` to discover tool metadata and per-tool OAuth requirements before establishing an OAuth session. These methods expose **only public tool schemas and server protocol metadata**. No personal memory, proposal, or private record is returned. Anonymous `tools/call` yields `isError: true` and `_meta['mcp/www_authenticate']` with the protected-resource discovery URL. All authenticated tool execution continues to validate credentials and scope. Test both initial app creation and subsequent OAuth consent; a successful CI test alone does not prove ChatGPT's hosted connector supports the deployment.
