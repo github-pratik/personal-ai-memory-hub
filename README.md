@@ -29,7 +29,7 @@ ChatGPT / Claude / Grok / Gemini / compatible MCP clients
 
 - **Worker:** https://personal-ai-memory-hub.p-pshpatil.workers.dev
 - **MCP endpoint:** `https://personal-ai-memory-hub.p-pshpatil.workers.dev/mcp`
-- **Status:** Worker deployed; private browser login and dashboard verified by the owner, GitHub CI green on the login fix. Remote MCP client login/tool execution is **not yet verified**.
+- **Status:** Worker deployed; private browser login and dashboard verified by the owner, GitHub CI green on the login fix. **Claude has successfully discovered all three MCP tools and called `search_memory`**, returning `{"items":[]}` with no error (owner-reported live test). Other clients are pending.
 - **Memory database:** empty by choice during integration setup; no production career facts should be published to this repository.
 - **Email OTP:** Cloudflare Access integration code exists, but Access policy and passwordless browser sign-in are **not enabled**. The current login uses a private access key.
 
@@ -54,7 +54,7 @@ The public endpoint does **not** mean private memory is publicly accessible: pri
 | Assistant | Path | Verified in real client? |
 |---|---|---|
 | **Grok** | Grok **Custom MCP Connector** or Grok Build remote HTTP MCP | **Not yet** |
-| **Claude** | Supported custom remote MCP connector, depending on client/plan | **Not yet** |
+| **Claude** | Custom remote MCP with `No sign-in` + restricted `Authorization: Bearer …` request header | **Yes: tool discovery and `search_memory` (owner-reported)** |
 | **ChatGPT** | Custom MCP/plugin connection subject to current authentication and account support | **Not yet** |
 | **Gemini** | Compatible MCP client or adapter, subject to its available runtime | **Not yet** |
 | Other MCP clients | Streamable HTTP compatibility and credential configuration | **Not yet** |
