@@ -231,6 +231,17 @@ const authorizationUrl=base+'/oauth/authorize?'+authQuery;
 const startNoCookie=await fetch(authorizationUrl);
 assert.equal(startNoCookie.status,200);
 assert.match(await startNoCookie.text(),/Sign in to your private Memory Hub/);
+const ownerLogin=await fetch(base+'/oauth/login',{method:'POST',redirect:'manual',
+ headers:{origin:base,'content-type':'application/x-www-form-urlencoded'},
+ body:new URLSearchParams({params:authQuery.toString(),secret:owner})});
+assert.equal(ownerLogin.status,303);
+const oauthCookie=ownerLogin.headers.get('set-cookie')?.split(';')[0];
+assert.ok(oauthCookie?.startsWith('pamh_session='));
+assert.match(ownerLogin.headers.get('location')||'',/\/oauth\/authorize\?/);
+const loginConsent=await fetch(ownerLogin.headers.get('location'),{headers:{cookie:oauthCookie}});
+assert.equal(loginConsent.status,200);
+assert.match(await loginConsent.text(),/Authorize Synthetic OAuth Client/);
+
 const badConsent=await fetch(authorizationUrl,{method:'POST',redirect:'manual',headers:{cookie,origin:'https://evil.example','content-type':'application/x-www-form-urlencoded'},body:'decision=approve'});
 assert.equal(badConsent.status,403);
 const consent=await fetch(authorizationUrl,{headers:{cookie}});
