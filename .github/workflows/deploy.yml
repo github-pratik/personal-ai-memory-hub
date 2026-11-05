@@ -13,7 +13,6 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-      CLOUDFLARE_D1_DATABASE_ID: ${{ vars.CLOUDFLARE_D1_DATABASE_ID }}
       MEMORY_API_TOKEN: ${{ secrets.MEMORY_API_TOKEN }}
       MEMORY_AGENT_TOKEN: ${{ secrets.MEMORY_AGENT_TOKEN }}
     steps:
@@ -25,13 +24,9 @@ jobs:
         run: |
           test -n "$CLOUDFLARE_API_TOKEN" || (echo "Cloudflare token not configured"; exit 1)
           test -n "$CLOUDFLARE_ACCOUNT_ID" || (echo "Cloudflare account ID not configured"; exit 1)
-          test -n "$CLOUDFLARE_D1_DATABASE_ID" || (echo "Cloudflare D1 database ID not configured"; exit 1)
           test "${#MEMORY_API_TOKEN}" -ge 32 || (echo "Missing strong MEMORY_API_TOKEN"; exit 1)
       - run: npm install --no-audit --no-fund
       - run: npm run check
-      - name: Build temporary deployment config
-        run: |
-          node -e "const fs=require('fs');const path='wrangler.jsonc';const s=fs.readFileSync(path,'utf8');fs.writeFileSync(path,s.replace('REPLACE_WITH_YOUR_D1_DATABASE_ID',process.env.CLOUDFLARE_D1_DATABASE_ID));"
       - name: Apply migrations to D1
         run: npx wrangler d1 migrations apply memory-hub --remote
       - name: Deploy Worker
