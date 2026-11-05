@@ -28,6 +28,7 @@ Implemented, tested, reviewed, documented and linked to an issue. Mark blocked w
 ## Cloudflare engineering tools
 
 Cloudflare-maintained skills are installed in `.agents/skills/`:
+- `cloudflare` for routing Cloudflare architecture questions to relevant products and docs;
 - `wrangler` for Workers and D1 development/deployment;
 - `workers-best-practices` for secure and reliable Cloudflare Workers;
 - `agents-sdk` as optional guidance only (do not add Agents SDK unless justified).
