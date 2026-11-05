@@ -66,9 +66,38 @@ const worker = {
       if(!env.DB)return err('Database binding missing',503);
       const staticRole=roleOf(request.headers.get('authorization'),env);
       const scopes=staticRole?null:await oauthScopes(request,env);
-      if(!staticRole&&!scopes)return new Response(JSON.stringify({error:'Unauthorized'}),{
-        status:401,headers:{'content-type':'application/json','cache-control':'no-store','www-authenticate':oauthChallenge(request)}
-      });
+      if(!staticRole&&!scopes){
+        // Public MCP discovery exposes schemas only, never memory content. ChatGPT
+        // needs to inspect these OAuth-protected tools before the login flow.
+        // No authenticated tools/call may execute through this path.
+        if(method==='POST'){
+          let message:Record<string,unknown>|null=null;
+          try{
+            const raw=await request.clone().text();
+            if(raw.length<=16000){
+              const parsed:unknown=JSON.parse(raw);
+              if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))message=parsed as Record<string,unknown>;
+            }
+          }catch{}
+          const discovery=new Set(['initialize','ping','tools/list','notifications/initialized']);
+          if(message?.jsonrpc==='2.0'&&typeof message.method==='string'&&discovery.has(message.method)){
+            return handleMcp(request,env);
+          }
+          if(message?.jsonrpc==='2.0'&&message.method==='tools/call'){
+            // Tool-level OAuth error gives ChatGPT an actionable link prompt.
+            // Returning tool metadata does not grant permission to execute it.
+            const id=typeof message.id==='string'||typeof message.id==='number'?message.id:null;
+            const challenge=oauthChallenge(request)+', error="invalid_token", error_description="Sign in to Personal AI Memory Hub to use this tool"';
+            return json({jsonrpc:'2.0',id,result:{
+              content:[{type:'text',text:'Authentication required. Connect your Personal AI Memory Hub account first.'}],
+              isError:true,_meta:{'mcp/www_authenticate':[challenge]}
+            }});
+          }
+        }
+        return new Response(JSON.stringify({error:'Unauthorized'}),{
+          status:401,headers:{'content-type':'application/json','cache-control':'no-store','www-authenticate':oauthChallenge(request)}
+        });
+      }
       return handleMcp(request,env,scopes||undefined);
     }
     const role=roleOf(request.headers.get('authorization'),env);
