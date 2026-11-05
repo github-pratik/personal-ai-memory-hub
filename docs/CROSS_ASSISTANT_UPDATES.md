@@ -57,3 +57,7 @@ Example instruction to Claude after deployment:
 - A connector may need OAuth or fixed HTTP headers, and is not considered compatible until actual end-to-end testing.
 
 See [MCP.md](MCP.md), [SECURITY.md](SECURITY.md), [STATUS.md](STATUS.md).
+
+## When the target memory was archived
+
+The dashboard must show the target state instead of implying that all memories in pending corrections remain approved. If an original memory was archived after the correction was proposed, the normal approval endpoint rejects it. The owner can explicitly choose **Restore archived memory and approve correction** after reviewing the original and replacement. This reactivates the archived record as approved and applies the correction together, preserving its ID and revision history. It is not automatic and agents cannot invoke it. For a changed-but-still-approved record, discard the stale proposal and suggest a fresh correction instead.
