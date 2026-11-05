@@ -116,7 +116,8 @@ assert.equal(confirmedCorrection.res.status,200,JSON.stringify(confirmedCorrecti
 const corrected=await request('/v1/memories/'+afterApprove.data.items[0].id);
 assert.equal(corrected.data.title,'MCP synthetic corrected project');
 const duplicatedCorrection=await request('/v1/memory-updates/'+proposedCorrection.id+'/approve','POST');
-assert.equal(duplicatedCorrection.res.status,409);
+assert.equal(duplicatedCorrection.res.status,200);
+assert.equal(duplicatedCorrection.data.already_applied,true);
 const staleSuggestion=await mcp('tools/call',{name:'propose_memory_update',arguments:{
  memory_id:afterApprove.data.items[0].id,
  title:'Stale suggestion that must never be applied',
