@@ -63,3 +63,9 @@ The workflow registers **only** `https://grok.com/connectors-oauth-exchange-code
 - **Deploying source:** use a **new** GitHub Actions deployment workflow run on current `main`, not a rerun of an old job.
 
 See [MCP.md](MCP.md), [STATUS.md](STATUS.md), [OAUTH_REQUIREMENTS.md](OAUTH_REQUIREMENTS.md) and [SECURITY.md](SECURITY.md).
+
+## November 5, 2026: missing sign-in prompt fix
+
+Grok previously showed **Connected** and discovered the five tools but then reported **Authentication is required** when invoking `search_memory`, without opening the owner sign-in page. The server used to return HTTP 200 with a JSON-RPC authentication error on unauthenticated `tools/call`, which is **not** the MCP OAuth HTTP transport challenge. The handler has been corrected to send HTTP **401 Unauthorized** with `WWW-Authenticate: Bearer resource_metadata="https://personal-ai-memory-hub.p-pshpatil.workers.dev/.well-known/oauth-protected-resource"` and an invalid-token error. Public schema discovery remains intact; unauthenticated reads/writes stay forbidden. Automated tests pass, but Grok sign-in is still **not** verified until new code is deployed and tested.
+
+After deploying the latest code via a new workflow run, try calling `search_memory` in Grok again. If Grok opens the Memory Hub consent screen, finish owner sign-in there. If it still displays only **Connected** with an authentication-required card, collect the exact error and investigate whether Grok's hosted connector attempts OAuth discovery, registration, or token exchange. Do not disable authentication.
