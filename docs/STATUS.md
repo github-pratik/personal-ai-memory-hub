@@ -35,3 +35,7 @@ Updated November 5, 2026 (US Eastern).
 Never expose personal records or credentials in this public source repository.
 
 See [MCP integration](MCP.md), [Grok connector](GROK.md), [cross-assistant update workflow](CROSS_ASSISTANT_UPDATES.md) and [security](SECURITY.md).
+
+## November 5: Grok tool-call OAuth challenge fix (pending deployment)
+
+Grok can discover all five tools and shows its connector as connected but reports authentication required when invoking `search_memory`. Investigation against MCP authorization and RFC 9728 found that unauthenticated `tools/call` previously responded HTTP 200 with a JSON-RPC error, rather than the required HTTP **401** `WWW-Authenticate: Bearer resource_metadata=...` challenge. The handler now returns HTTP 401 for protected calls and preserves anonymous `initialize`/`tools/list` metadata discovery. Authenticated Claude and ChatGPT restricted Bearer clients are unchanged. Local automated tests cover the 401 challenge, zero anonymous writes, OAuth flow, and legacy auth. **Grok authentication has not yet been verified after this change.** A new manual deployment is required.
