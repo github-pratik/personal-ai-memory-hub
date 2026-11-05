@@ -1,48 +1,37 @@
 # Engineering status
 
-Updated: November 4, 2026 (US Eastern).
+Updated November 5, 2026 (US Eastern).
 
-## Verified
+## Main product requirement
 
-- Cloudflare Worker deployed at https://personal-ai-memory-hub.p-pshpatil.workers.dev.
-- Deployment #4 included the login-origin fix and succeeded; owner verified the login and dashboard in a browser.
-- Cloudflare D1 migrations applied. Owner key is configured privately.
-- Browser dashboard supports approved memory management, proposals, import/export, and job matching.
-- MCP endpoint exists at `/mcp` with read-only `search_memory`, `get_memory`, `match_job`, plus newly implemented `propose_memory` and `propose_memory_update`. Both create pending review items only; owner approval of a correction uses a version check. The updated Worker has been deployed successfully. Claude discovered all five tools and submitted a synthetic `propose_memory` record with status `pending` (owner-reported). Live approval/rejection and `propose_memory_update` remain to be tested.
-- **Claude live MCP test (reported by owner):** connector discovered the original three tool descriptions, called `search_memory` with `query: "Python"`, and received `{"items":[]}` without an error. This validates that one external AI client can read from the empty approved-memory store; it does not validate all tool calls, writes, or other clients.
-- Unit, TypeScript, D1 local migration, and Worker smoke tests passed on the current tested release.
+**One private, user-controlled memory source for ChatGPT, Claude, Grok, Gemini, and other compatible MCP clients.** Any connected assistant can read approved information and, on an explicit user request, submit new memories or corrections for **owner approval**. Core use cases include job application status, resume versions, resume guidelines, project facts and preferences. The dashboard remains the authority for approval/rejection. Cross-assistant interoperability is the primary objective, not a separate database per model.
 
-## Main project goal
+## Verified in live clients (owner-reported)
 
-A **single private source of truth** for ChatGPT, Claude, Grok, Gemini and compatible MCP clients. The browser dashboard supports the same data store. **Cross-assistant interoperability is the primary product priority**; job application evidence retrieval is one use case.
+- Cloudflare Worker, D1 storage and signed-in private dashboard work.
+- MCP has five tools: `search_memory`, `get_memory`, `match_job`, `propose_memory`, and `propose_memory_update`.
+- Claude connected with a restricted Bearer Authorization header, discovered all five tools, created a pending memory proposal, and read approved memory after owner approval.
+- Claude submitted a correction; a previously archived target triggered a protected approval failure. The explicit owner-only **Restore archived memory and approve correction** recovery worked; the original memory UUID was preserved.
+- ChatGPT custom Streamable HTTP MCP connected using a restricted Bearer Authorization header and discovered all five tools. It retrieved the same record previously updated through Claude.
+- **Two-way write/read verification:** ChatGPT submitted correction proposal `57b7c291-cc87-4bec-8ad5-148239c1adab` for memory `c6b82a21-761e-842b-845e-1516025adda5`; the owner approved it; Claude retrieved the updated title **MCP Cross-Assistant Integration - Verified**, with `updated_at` `2026-11-05T05:42:34.581Z`. The read was from the same UUID.
+- Live unauthenticated probes confirmed health, OAuth discovery endpoints, MCP initialization and tool discovery; tool execution still requires credentials. Local CI, migration, auth, OAuth, owner-approval and regression tests passed.
 
-The owner chose to leave production memories empty until integrations are validated.
+**Verified pattern:** Claude → owner-reviewed Memory Hub → ChatGPT, and ChatGPT → owner-reviewed Memory Hub → Claude. These are actual owner-reported real-client tool outputs, not merely unit-test results.
 
-## Not yet verified / still to do
+## Authentication
 
-1. Add a separate restricted `MEMORY_AGENT_TOKEN` to GitHub's `production` environment secrets and run a **new** manual deployment on current `main`. Do not share the owner key.
-2. Verify pending synthetic proposal `ce7f0252-848a-45f7-a0d5-53acc4bb8e45` appears in the owner dashboard, then reject it; follow with a full `propose_memory_update` end-to-end review test. Then complete unauthorized access and transport tests.
-3. Connect Grok with its custom MCP connector; its current onboarding requested OAuth credentials, which our endpoint does not implement yet. See [Grok setup](GROK.md).
-4. Connect Claude, ChatGPT (subject to account support) and Gemini, adapting auth safely where necessary.
-5. Enable Cloudflare Access email OTP for browser sign-in (optional, not yet configured).
-6. Perform live abuse/security, quota, session, backup and restore testing before adding sensitive data.
+- **Working hosted integrations:** restricted agent Bearer header in Claude and ChatGPT.
+- **OAuth:** discovery metadata, dynamic public-client registration, owner login/consent, PKCE S256, scoped short-lived access tokens are implemented and deployed. OAuth login has not yet succeeded end-to-end through a hosted client. Access-token refresh/revocation controls, stronger quotas/abuse protection and independent security review remain outstanding.
+- MCP anonymous `initialize` and `tools/list` reveal public tool definitions only. Unauthenticated `tools/call` returns an OAuth challenge, not private facts.
 
-Claude is the **first owner-verified integration**. Other assistants are not verified connected. Never disable authentication to bypass connector limitations.
+## Pending milestones
 
-See [MCP integration](MCP.md), [Security](SECURITY.md) and [Grok](GROK.md).
+1. **Grok:** configure the same public `/mcp` URL in its Custom MCP connector, authenticate securely, verify tool listing and retrieval of the existing synthetic memory, then propose a synthetic correction. Grok may require its own OAuth credentials/setup; do not assume it accepts the Claude/ChatGPT custom header workflow.
+2. **Gemini:** connect and verify the same read/propose/owner-approval/readback cycle.
+3. **First-class job tracking:** dedicated application states, company/role/date, applied resume version and timeline; currently stored as owner-reviewed `other` memories.
+4. **Resume guidelines:** structured, non-duplicated owner-reviewed `preference` records.
+5. Production security review, auth/secret rotation, rate limits, auditability, backup/restore and token revocation before storing sensitive information.
 
-## Cross-assistant update workflows
+Never expose personal records or credentials in this public source repository.
 
-Supported by code and local tests: proposed new memories, corrections to approved records, owner-side before/after review, rejection and version-checked approval. Job application history and resume guidelines can use categories `other` and `preference` respectively; dedicated structured application status and revision rules remain future work. See [CROSS_ASSISTANT_UPDATES.md](CROSS_ASSISTANT_UPDATES.md).
-
-## Archived-target correction recovery (code change pending deployment)
-
-Correction proposals may reference a memory that was archived after the suggestion was created. The dashboard previously displayed the original via a join without its state and offered an approval action that rejected archived targets. The dashboard now shows the target state and offers a **separate, explicit owner-only Restore archived memory and approve correction** action. Ordinary correction approval still refuses archived and stale records; the recovery operation is transactional and records a revision. Regression test covers archive, normal conflict, restricted-agent refusal, owner recovery, and repeat requests. The exact current state of the owner's production test record has not been independently read.
-
-## November 5, 2026: OAuth interoperability implementation (not yet deployed)
-
-MCP OAuth protected-resource and authorization-server discovery, dynamic client registration, owner login/consent, PKCE S256 code exchange, short-lived scoped access tokens and strict resource binding were added. Existing Claude fixed Bearer-token access is preserved. Automated end-to-end OAuth tests cover successful consent, token exchange, code replay rejection and owner-route isolation. ChatGPT/Grok remain **not connected**, and no OAuth production deployment has been confirmed. Next: new manual Cloudflare deploy, then ChatGPT OAuth connection test and Grok client test. See [OAUTH_REQUIREMENTS.md](OAUTH_REQUIREMENTS.md).
-
-## November 5: ChatGPT connector authentication denial follow-up
-
-The owner successfully deployed the first OAuth implementation at commit `a959d718`, but ChatGPT reported `The MCP server denied access`. Diagnosis against OpenAI's plugin authentication guidance found that initial MCP initialization and schema discovery were previously rejected with HTTP 401 before the assistant could discover tool-level OAuth policies. The code now permits **anonymous MCP initialize, ping and tools/list only** and advertises OAuth2 scopes per tool. Unauthenticated `tools/call` returns a structured `mcp/www_authenticate` challenge; no untrusted call can access or modify private data. OAuth metadata, client registration, signed-in consent and existing Claude headers are preserved. Automated tests verify anonymous discovery, blocked reads/writes, and the browser authorization flow. This is a compatibility hypothesis until redeployed and retested through ChatGPT; do not claim a successful connection yet.
+See [MCP integration](MCP.md), [Grok connector](GROK.md), [cross-assistant update workflow](CROSS_ASSISTANT_UPDATES.md) and [security](SECURITY.md).
