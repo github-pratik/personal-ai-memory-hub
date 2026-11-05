@@ -77,6 +77,26 @@ assert.ok((await tools.json()).result.tools.some(t=>t.name==='match_job'));
 const searched=await mcp('tools/call',{name:'search_memory',arguments:{query:'Python'}});
 assert.equal(searched.status,200);
 assert.match(JSON.stringify(await searched.json()),/Python API ownership/);
+const pendingToolList=await mcp('tools/list');
+assert.ok((await pendingToolList.json()).result.tools.some(t=>t.name==='propose_memory'));
+const suggested=await mcp('tools/call',{name:'propose_memory',arguments:{
+ title:'MCP synthetic pending project',body:'A simulated project record requiring explicit user review',category:'project',source:'Synthetic MCP smoke test'
+}});
+assert.equal(suggested.status,200);
+const suggestion=JSON.parse((await suggested.json()).result.content[0].text);
+assert.equal(suggestion.status,'pending');
+assert.equal(suggestion.requires_owner_approval,true);
+const beforeApprove=await request('/v1/memories?q=MCP synthetic pending project');
+assert.equal(beforeApprove.data.items.length,0);
+const mcpReview=await request('/v1/proposals?status=pending');
+assert.ok(mcpReview.data.items.some(item=>item.id===suggestion.id));
+const agentCannotApprove=await request('/v1/proposals/'+suggestion.id+'/approve','POST',undefined,agent);
+assert.equal(agentCannotApprove.res.status,403);
+const ownerApproves=await request('/v1/proposals/'+suggestion.id+'/approve','POST');
+assert.equal(ownerApproves.res.status,200);
+const afterApprove=await request('/v1/memories?q=MCP synthetic pending project');
+assert.equal(afterApprove.data.items.length,1);
+
 const homepage=await fetch(base+'/');
 assert.equal(homepage.status,200);
 assert.match(await homepage.text(),/Private access key/);
