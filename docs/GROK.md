@@ -1,49 +1,53 @@
 # Connect Grok to Personal AI Memory Hub
 
-## Integration state
+**State (November 5, 2026): Grok not yet verified connected.** ChatGPT and Claude already completed a live two-way memory update/readback cycle with the same D1 database.
 
-The Memory Hub MCP endpoint is deployed, but a live Grok connection and tool-call test **have not been completed**. Grok documents custom MCP connectors at https://docs.x.ai/grok/connectors and provides a connection UI at https://grok.com/connectors.
+## Start here: Grok web connector
 
-**Use the same server URL for every compatible MCP client:**
+1. Open **https://grok.com/connectors** and choose **New Connector → Custom**.
+2. Name: **Pratik Personal Memory**.
+3. Server URL: `https://personal-ai-memory-hub.p-pshpatil.workers.dev/mcp`.
+4. Choose automatic OAuth discovery/sign-in if the UI offers it. The Worker already publishes protected-resource and OAuth authorization-server discovery metadata, public client registration (DCR), owner consent, PKCE S256 and a token endpoint. These endpoints are deployed, but Grok's compatibility has **not yet been tested**.
+5. If Grok displays an OAuth credentials form demanding **Client ID**, **Authorization Endpoint** and **Token Endpoint** immediately, **do not enter an API token as the Client ID**, invent IDs, or use the owner key. The connector may require a client to be registered before entry. Client registration needs Grok's **exact approved callback/redirect URI**. We must obtain that URI from Grok's setup/docs and register it securely; until then, do not guess it.
+6. After authorization, ask Grok to list available tools and call `search_memory` for `MCP Cross-Assistant Integration`, then `get_memory` on `c6b82a21-761e-842b-845e-1516025adda5`. It should return the approved test memory with title `MCP Cross-Assistant Integration - Verified`.
+7. To verify writes, explicitly ask Grok to call `propose_memory_update` with a **synthetic** correction. It must stay **pending** until the user approves it in the dashboard. Do not test real career facts yet.
 
-```text
-https://personal-ai-memory-hub.p-pshpatil.workers.dev/mcp
-```
+Grok's official [custom MCP connector guide](https://docs.x.ai/grok/connectors) documents the New Connector → Custom entry point and publicly reachable URL; it does **not** promise that the Grok web form accepts arbitrary HTTP Authorization headers. Avoid exposing the server or placing tokens in URLs to work around its authentication requirements.
 
-No Grok-specific Worker or separate database is necessary. This endpoint already implements `initialize`, `tools/list`, `tools/call`, `ping` and `notifications/initialized`, plus the read tools `search_memory`, `get_memory`, `match_job`, and the pending-only `propose_memory` tool after the updated Worker is deployed.
+## MCP tools
 
-## Configure securely
+- `search_memory`: read approved records by keyword.
+- `get_memory`: read one approved record by UUID.
+- `match_job`: match approved evidence heuristically.
+- `propose_memory`: submit a new untrusted suggestion to owner review.
+- `propose_memory_update`: submit a correction to an existing approved record for owner review.
 
-1. In GitHub **Settings → Environments → production → Environment secrets**, add a randomly generated, **separate** `MEMORY_AGENT_TOKEN` (32+ characters). Never use the dashboard owner key in an AI client.
-2. From **Actions → Deploy to Cloudflare (manual, free-tier only)**, run a **new** workflow on `main`. The optional agent credential is applied only when the workflow receives this secret.
-3. Visit https://grok.com/connectors → **New Connector → Custom**.
-4. Set the server URL above. Configure authentication as supported by the current Grok connector UI. The Memory Hub currently expects `Authorization: Bearer <MEMORY_AGENT_TOKEN>` on `/mcp`. Do not type the secret into a public GitHub page or paste it into chat.
-5. Discover the tools, and test a **read-only** call. With an empty database, searches should return an empty list, not unrelated or invented personal facts.
-6. Confirm Grok cannot create or approve an **approved** memory via MCP. `propose_memory` can only create an unapproved pending proposal.
+There is **one** Cloudflare Worker and **one** private D1 memory database for ChatGPT, Claude and Grok. No Grok-specific copy is needed. Owner-only approval/rejection is not exposed to Grok.
 
-**Compatibility note:** Grok supporting *custom MCP* does **not** prove that its hosted connector UI supports the exact fixed Bearer-header authorization used by this MVP. If Grok's offered authentication differs, stop and implement an appropriate OAuth flow or other secure bridge instead of removing API authentication or embedding a token in the URL. A self-hosted MCP client with configurable headers can be used to test the endpoint separately.
+## Deployed OAuth endpoints (if manual setup is necessary)
 
-**Never make `/mcp` public without authentication to simplify onboarding.** Empty memory today is not a security guarantee for the future.
+| Field | Deployed value |
+|---|---|
+| MCP URL | `https://personal-ai-memory-hub.p-pshpatil.workers.dev/mcp` |
+| Authorization server metadata | `https://personal-ai-memory-hub.p-pshpatil.workers.dev/.well-known/oauth-authorization-server` |
+| Protected resource metadata | `https://personal-ai-memory-hub.p-pshpatil.workers.dev/.well-known/oauth-protected-resource` |
+| Authorization Endpoint | `https://personal-ai-memory-hub.p-pshpatil.workers.dev/oauth/authorize` |
+| Token Endpoint | `https://personal-ai-memory-hub.p-pshpatil.workers.dev/oauth/token` |
+| Dynamic Client Registration | `https://personal-ai-memory-hub.p-pshpatil.workers.dev/oauth/register` |
+| Scopes | `memory:read memory:propose` |
+| Auth method | public client `none`, **PKCE S256** |
+| Client ID | **Not yet registered for Grok**. Registration must bind Grok's exact callback URI. |
+| Client secret | None for a PKCE public client. Do not use the Memory Hub/Cloudflare secrets. |
 
-## What Grok can do once connected
-
-- `search_memory` — search owner-approved professional facts by keyword and category.
-- `get_memory` — retrieve a specific approved fact with its source.
-- `match_job` — rank approved evidence for a job description.
-- `propose_memory` — submit a user-requested memory suggestion to owner review; cannot approve it.
-
-All searches read the same Cloudflare D1 database used by the browser dashboard and other assistants.
+**Limitations:** OAuth tokens expire after one hour and there is no refresh-token flow or revocation dashboard yet. A real hosted Grok session has not been tested. We must resolve any incompatibility without weakening the private memory boundary.
 
 ## Troubleshooting
 
-- **401 Unauthorized:** missing/incorrect Bearer token or agent secret not deployed.
-- **403 Forbidden:** the token is authenticated but lacks permission, or Cloudflare Access policy blocks the client.
-- **Tool discovery fails:** verify MCP HTTP transport, methods and authorization support. Do not assume Grok supports custom headers until its UI confirms.
-- **No results:** an empty database is expected during setup.
-- **Deploy has the old behavior:** run a **new** workflow on current `main`; `Re-run all jobs` on a previous run redeploys its original commit.
+- **OAuth form cannot discover client:** Grok might not support DCR in its web flow. Obtain its exact callback URI, then register and paste the issued client ID; never fabricate one.
+- **401:** absent/expired/incorrect OAuth token or Bearer key.
+- **403:** insufficient OAuth scope or wrong role.
+- **Tools missing:** verify server URL ends in `/mcp` and the connector is enabled.
+- **Owner key / client secret:** never paste into chat, source, screenshots, or URL.
+- **Deploying source:** use a **new** GitHub Actions deployment workflow run on current `main`, not a rerun of an old job.
 
-See [MCP.md](MCP.md), [STATUS.md](STATUS.md), and [SECURITY.md](SECURITY.md).
-
-## OAuth implementation update (requires deployment and live test)
-
-The Memory Hub source now includes OAuth authorization server metadata, dynamic client registration, owner-consented authorization code + PKCE, and a token endpoint. After deploying current `main`, retry the same MCP URL. Grok's connector may request a client ID and explicit endpoint configuration; the exact client onboarding behavior must be verified in Grok. No successful Grok OAuth connection has been established yet. Consult [OAuth requirements](OAUTH_REQUIREMENTS.md); never substitute owner/Cloudflare tokens for OAuth client credentials.
+See [MCP.md](MCP.md), [STATUS.md](STATUS.md), [OAUTH_REQUIREMENTS.md](OAUTH_REQUIREMENTS.md) and [SECURITY.md](SECURITY.md).
