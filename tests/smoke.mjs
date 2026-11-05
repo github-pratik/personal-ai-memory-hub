@@ -218,7 +218,7 @@ const grokInit=await fetch(base+'/grok/mcp',{method:'POST',
  headers:{'content-type':'application/json'},
  body:JSON.stringify({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'Grok',version:'1'}}})});
 assert.equal(grokInit.status,401);
-assert.match(grokInit.headers.get('www-authenticate')||'',/oauth-protected-resource\\/grok\\/mcp/);
+assert.ok((grokInit.headers.get('www-authenticate')||'').includes('oauth-protected-resource/grok/mcp'));
 const unauthorizedMcp=await fetch(base+'/mcp',{method:'POST',headers:{'content-type':'application/json'},body:'{}'});
 assert.equal(unauthorizedMcp.status,401);
 assert.match(unauthorizedMcp.headers.get('www-authenticate')||'',/oauth-protected-resource/);
