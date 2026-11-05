@@ -10,7 +10,7 @@
 https://personal-ai-memory-hub.p-pshpatil.workers.dev/mcp
 ```
 
-The Worker is deployed. **Claude has been verified by the owner** to discover all three tools and successfully call `search_memory` with `query: "Python"`; the expected response was `{"items":[]}`. Other clients have not been verified. The memory store is deliberately empty while integration is tested.
+The Worker is deployed. **Claude has been verified by the owner** to discover the original three tools and successfully call `search_memory` with `query: "Python"`; the expected response was `{"items":[]}`. Other clients have not been verified. The memory store is deliberately empty while integration is tested.
 
 ## Current MCP implementation
 
@@ -21,8 +21,10 @@ The Worker is deployed. **Claude has been verified by the owner** to discover al
   1. `search_memory`: search approved memories by text/category; include evidence source.
   2. `get_memory`: retrieve an approved record by UUID.
   3. `match_job`: return evidence ranked against a job description.
+- **Pending proposal only**:
+  4. `propose_memory`: submit a proposed fact containing `title`, `body`, `category`, and `source`, only upon a user's explicit request. The server validates input, labels its source as an AI suggestion, checks the pending queue limit (100), and responds with `status: "pending"` and `requires_owner_approval: true`. It does **not** add an approved memory.
 
-An agent's token has narrower permissions than the owner. MCP cannot approve, edit or archive memories.
+An agent's token has narrower permissions than the owner. MCP cannot approve, edit, archive or delete approved memories. The owner reviews proposals in the private dashboard, where they can approve or reject them. Pending proposals are not returned by `search_memory` or `get_memory` until approved.
 
 ## Client compatibility checklist
 
@@ -42,7 +44,7 @@ An agent's token has narrower permissions than the owner. MCP cannot approve, ed
 2. Start a **new** Cloudflare deployment on current `main`. Verify the secret-configuration step succeeded.
 3. Use a trusted MCP client that can set an Authorization Bearer header and test `initialize`, `tools/list`, and `search_memory`.
 4. Empty memory results are expected. Test no-token requests return HTTP 401 and agents cannot mutate approved records.
-5. Continue Claude testing (`match_job`, read-only constraints) and validate Grok, ChatGPT, and Gemini **separately**, documenting actual outcomes.
+5. Continue Claude testing (`match_job`, `propose_memory`, owner-only approval constraints) and validate Grok, ChatGPT, and Gemini **separately**, documenting actual outcomes.
 
 Never share tokens or sensitive response payloads in public issues, commit history, or screenshots.
 
@@ -54,3 +56,14 @@ Never share tokens or sensitive response payloads in public issues, commit histo
 - The official Cloudflare **management MCP** in `.mcp.json` is different from our Memory Hub **memory MCP**.
 
 See [Security](SECURITY.md), [Grok setup](GROK.md), [STATUS](STATUS.md).
+
+## Verifying the proposal tool safely
+
+1. Deploy the newest commit using **a new** GitHub Actions workflow run; rerunning old jobs deploys old source.
+2. In Claude, confirm `propose_memory` appears in the connector's tool list.
+3. Explicitly ask Claude to submit a **clearly synthetic test proposal**, not a real personal fact. Include a source like `Synthetic user test request`.
+4. Confirm the response says `pending` and `requires_owner_approval: true`.
+5. Confirm the proposed memory is **absent** from approved-memory searches but visible in the dashboard's **Proposed memories** section.
+6. Reject the synthetic proposal using the private dashboard. Confirm the approved memory store remains unchanged.
+
+Do not give an AI client your dashboard owner token. The agent may **submit proposals**, but it may not approve them. Model-generated text is an untrusted suggestion until the owner confirms it.
