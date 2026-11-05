@@ -10,7 +10,7 @@
 https://personal-ai-memory-hub.p-pshpatil.workers.dev/mcp
 ```
 
-The Worker is deployed, but **a live connection from a named AI assistant has not yet been verified**. The memory store is deliberately empty while integration is tested.
+The Worker is deployed. **Claude has been verified by the owner** to discover all three tools and successfully call `search_memory` with `query: "Python"`; the expected response was `{"items":[]}`. Other clients have not been verified. The memory store is deliberately empty while integration is tested.
 
 ## Current MCP implementation
 
@@ -30,7 +30,7 @@ An agent's token has narrower permissions than the owner. MCP cannot approve, ed
 |---|---|---|
 | Grok | Custom MCP connector | Not tested yet; [setup](GROK.md) |
 | ChatGPT | Custom MCP integration, subject to account/workspace and auth support | Not tested |
-| Claude | Custom remote MCP connector | Not tested |
+| Claude | Custom remote MCP connector with restricted `Authorization` request header | **Tool discovery + `search_memory` succeeded (owner-reported)** |
 | Gemini | Compatible MCP runtime/adapter | Not tested |
 | MCP developer client | HTTP with fixed Bearer authorization | Next verification target |
 
@@ -42,7 +42,7 @@ An agent's token has narrower permissions than the owner. MCP cannot approve, ed
 2. Start a **new** Cloudflare deployment on current `main`. Verify the secret-configuration step succeeded.
 3. Use a trusted MCP client that can set an Authorization Bearer header and test `initialize`, `tools/list`, and `search_memory`.
 4. Empty memory results are expected. Test no-token requests return HTTP 401 and agents cannot mutate approved records.
-5. Validate Grok, ChatGPT, Claude, and Gemini **separately** and record actual outcomes.
+5. Continue Claude testing (`match_job`, read-only constraints) and validate Grok, ChatGPT, and Gemini **separately**, documenting actual outcomes.
 
 Never share tokens or sensitive response payloads in public issues, commit history, or screenshots.
 
