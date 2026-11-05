@@ -13,7 +13,13 @@ const escape=(s:string)=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const b64=(bytes:Uint8Array)=>btoa(String.fromCharCode(...bytes)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 const random=()=>b64(crypto.getRandomValues(new Uint8Array(32)));
 async function digest(s:string):Promise<string>{return b64(new Uint8Array(await crypto.subtle.digest('SHA-256',encoder.encode(s))))}
-const resourceFor=(request:Request)=>new URL('/mcp',request.url).toString();
+const resourceFor=(request:Request)=>new URL(new URL(request.url).pathname==='/grok/mcp'?'/grok/mcp':'/mcp',request.url).toString();
+const approvedResource=(request:Request,resource:string)=>resource===new URL('/mcp',request.url).toString()||resource===new URL('/grok/mcp',request.url).toString();
+// Pinned Grok identity and exact callback origins, from Grok's public MCP client
+// metadata at https://grok.com/oauth/mcp-client.json (verified 2026-11-05).
+// This is a trusted, preconfigured public OAuth client, not an open CIMD fetch.
+const GROK_CLIENT_ID='https://grok.com/oauth/mcp-client.json';
+const GROK_CALLBACKS=['https://grok.com/connectors-oauth-exchange-code/','https://console.x.ai/connectors-oauth-exchange-code/'];
 const issuerFor=(request:Request)=>new URL(request.url).origin;
 const scopeSet=['memory:read','memory:propose'];
 function allowedScope(s:string){const scopes=s.split(' ').filter(Boolean);return scopes.length>0 && scopes.length<=2 && new Set(scopes).size===scopes.length && scopes.every(v=>scopeSet.includes(v))}
@@ -38,6 +44,7 @@ function validClientInput(obj:unknown):obj is {client_name?:string;redirect_uris
 }
 const now=()=>Math.floor(Date.now()/1000);
 async function clientFor(env:Env,id:string):Promise<Client|null>{
+ if(id===GROK_CLIENT_ID)return {id,name:'Grok',redirect_uris:JSON.stringify(GROK_CALLBACKS)};
  if(!/^[0-9a-f-]{36}$/i.test(id))return null;
  return env.DB.prepare('SELECT id,name,redirect_uris FROM oauth_clients WHERE id=?').bind(id).first<Client>();
 }
@@ -46,7 +53,7 @@ async function authorizeParams(request:Request,env:Env,query:URLSearchParams):Pr
  const client_id=query.get('client_id')||'',redirect_uri=query.get('redirect_uri')||'',code_challenge=query.get('code_challenge')||'';
  const state=query.get('state')||'',scope=query.get('scope')||'memory:read memory:propose',resource=query.get('resource')||'';
  if(query.get('response_type')!=='code'||query.get('code_challenge_method')!=='S256'|| !/^[A-Za-z0-9_-]{43}$/.test(code_challenge) ||
-   state.length>500 || !allowedScope(scope) || resource!==resourceFor(request))return null;
+   state.length>500 || !allowedScope(scope) || !approvedResource(request,resource))return null;
  const client=await clientFor(env,client_id);
  if(!client||!JSON.parse(client.redirect_uris).includes(redirect_uri))return null;
  return {client,client_id,redirect_uri,code_challenge,state,scope,resource};
@@ -71,12 +78,12 @@ export async function oauthScopes(request:Request,env:Env):Promise<string[]|null
   .bind(hash,resourceFor(request),now()).first<{scopes:string}>();
  return token?token.scopes.split(' '):null;
 }
-export const oauthChallenge=(request:Request)=>'Bearer resource_metadata="'+issuerFor(request)+'/.well-known/oauth-protected-resource", scope="memory:read memory:propose"';
+export const oauthChallenge=(request:Request)=>'Bearer resource_metadata="'+issuerFor(request)+(new URL(request.url).pathname==='/grok/mcp'?'/.well-known/oauth-protected-resource/grok/mcp':'/.well-known/oauth-protected-resource')+'", scope="memory:read memory:propose"';
 export async function handleOAuth(request:Request,env:Env):Promise<Response|null>{
  const url=new URL(request.url),path=url.pathname,method=request.method,base=url.origin;
- if(path==='/.well-known/oauth-protected-resource'||path==='/.well-known/oauth-protected-resource/mcp'){
+ if(path==='/.well-known/oauth-protected-resource'||path==='/.well-known/oauth-protected-resource/mcp'||path==='/.well-known/oauth-protected-resource/grok/mcp'){
   if(method!=='GET')return fail('invalid_request','Only GET supported',405);
-  return json({resource:resourceFor(request),authorization_servers:[base],scopes_supported:scopeSet});
+  return json({resource:path.endsWith('/grok/mcp')?new URL('/grok/mcp',base).toString():new URL('/mcp',base).toString(),authorization_servers:[base],scopes_supported:scopeSet});
  }
  if(path==='/.well-known/oauth-authorization-server'){
   if(method!=='GET')return fail('invalid_request','Only GET supported',405);
@@ -141,7 +148,7 @@ export async function handleOAuth(request:Request,env:Env):Promise<Response|null
   const form=new URLSearchParams(raw);
   if(form.get('grant_type')!=='authorization_code')return fail('unsupported_grant_type','Only authorization_code is supported');
   const client_id=form.get('client_id')||'',code=form.get('code')||'',verifier=form.get('code_verifier')||'',redirectUri=form.get('redirect_uri')||'',resource=form.get('resource')||'';
-  if(!/^[A-Za-z0-9_-]{43,128}$/.test(verifier)|| !code || resource!==resourceFor(request))return fail('invalid_grant','Invalid PKCE or resource');
+  if(!/^[A-Za-z0-9_-]{43,128}$/.test(verifier)|| !code || !approvedResource(request,resource))return fail('invalid_grant','Invalid PKCE or resource');
   const client=await clientFor(env,client_id);
   if(!client||!JSON.parse(client.redirect_uris).includes(redirectUri))return fail('invalid_client','Unknown client or redirect');
   const hash=await digest(code);
