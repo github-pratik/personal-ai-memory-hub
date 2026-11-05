@@ -217,8 +217,13 @@ assert.equal((await grokProtected.json()).resource,base+'/grok/mcp');
 const grokInit=await fetch(base+'/grok/mcp',{method:'POST',
  headers:{'content-type':'application/json'},
  body:JSON.stringify({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'Grok',version:'1'}}})});
-assert.equal(grokInit.status,401);
-assert.ok((grokInit.headers.get('www-authenticate')||'').includes('oauth-protected-resource/grok/mcp'));
+assert.equal(grokInit.status,200);
+assert.equal((await grokInit.json()).result.serverInfo.name,'personal-ai-memory-hub');
+const grokTools=await fetch(base+'/grok/mcp',{method:'POST',
+ headers:{'content-type':'application/json'},
+ body:JSON.stringify({jsonrpc:'2.0',id:2,method:'tools/list'})});
+assert.equal(grokTools.status,401);
+assert.ok((grokTools.headers.get('www-authenticate')||'').includes('oauth-protected-resource/grok/mcp'));
 const unauthorizedMcp=await fetch(base+'/mcp',{method:'POST',headers:{'content-type':'application/json'},body:'{}'});
 assert.equal(unauthorizedMcp.status,401);
 assert.match(unauthorizedMcp.headers.get('www-authenticate')||'',/oauth-protected-resource/);
