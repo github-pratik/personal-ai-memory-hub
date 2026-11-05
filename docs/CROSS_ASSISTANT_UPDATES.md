@@ -11,7 +11,7 @@
 5. In the owner's private dashboard, review the proposed entry or side-by-side original and replacement, then approve or reject.
 6. On approval, the same approved facts are available to every connected assistant on subsequent searches.
 
-**Current release behavior:** the tools submit proposals only. Automatic trusted-memory updates are intentionally forbidden. Real-client verification of the new write tools remains pending until deployment.
+**Verified November 5, 2026:** Claude and ChatGPT both submitted pending correction proposals, which were approved by the owner and then retrieved from the other assistant. Automatic trusted-memory updates remain intentionally forbidden. Grok and Gemini have not yet been tested.
 
 ## Example: job application
 
@@ -41,7 +41,7 @@ User says: "Update my resume instructions: keep it one page, use concise XYZ bul
 
 New memory uses category `preference`, with title `Resume guideline: formatting and evidence`. Later corrections update the **same record** through `propose_memory_update`; they do not add contradictory duplicate memories.
 
-Example instruction to Claude after deployment:
+Example instruction to a connected assistant:
 
 > Search my Memory Hub for my current resume formatting guideline. Propose an update replacing it with my new rule, preserving any rules I did not ask to change. Do not claim it is approved. Show me the pending proposal ID.
 
@@ -61,3 +61,14 @@ See [MCP.md](MCP.md), [SECURITY.md](SECURITY.md), [STATUS.md](STATUS.md).
 ## When the target memory was archived
 
 The dashboard must show the target state instead of implying that all memories in pending corrections remain approved. If an original memory was archived after the correction was proposed, the normal approval endpoint rejects it. The owner can explicitly choose **Restore archived memory and approve correction** after reviewing the original and replacement. This reactivates the archived record as approved and applies the correction together, preserving its ID and revision history. It is not automatic and agents cannot invoke it. For a changed-but-still-approved record, discard the stale proposal and suggest a fresh correction instead.
+
+## Successful two-way cross-assistant test (November 5, 2026)
+
+The owner used one synthetic Cloudflare D1 record, UUID `c6b82a21-761e-842b-845e-1516025adda5`:
+
+1. Claude submitted a new memory; the owner approved it and Claude retrieved it.
+2. Claude submitted a correction; after an archived-target conflict was diagnosed, the owner explicitly restored and approved it. ChatGPT read the updated record.
+3. ChatGPT submitted correction proposal `57b7c291-cc87-4bec-8ad5-148239c1adab`; the owner approved it in the private dashboard.
+4. Claude retrieved the **same UUID**, now titled `MCP Cross-Assistant Integration - Verified`, body `Successfully tested shared memory creation, retrieval, and updates between Claude and ChatGPT using Personal AI Memory Hub.`, and timestamp `2026-11-05T05:42:34.581Z`.
+
+The integration was tested with restricted Bearer-header authentication. MCP OAuth metadata and PKCE endpoints exist and were publicly probed, but hosted-client OAuth sign-in has not been verified. Next provider to test: **Grok**. See [Grok connection guide](GROK.md).
