@@ -3,10 +3,13 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-11-01",
   "workers_dev": true,
-  "d1_databases": [{
-    "binding": "DB",
-    "database_name": "memory-hub",
-    "database_id": "c0f7dff1-4ade-4f24-ba02-969efcd61b93",
-    "migrations_dir": "migrations"
-  }]
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "memory-hub",
+      "database_id": "c0f7dff1-4ade-4f24-ba02-969efcd61b93",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "account_id": "ea0e1a904a7d89f955cc45b4ab7e9056"
 }
