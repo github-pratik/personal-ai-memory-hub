@@ -29,8 +29,8 @@ ChatGPT / Claude / Grok / Gemini / compatible MCP clients
 
 - **Worker:** https://personal-ai-memory-hub.p-pshpatil.workers.dev
 - **MCP endpoint:** `https://personal-ai-memory-hub.p-pshpatil.workers.dev/mcp`
-- **Status:** Worker deployed; private browser login and dashboard verified by the owner, GitHub CI green on the login fix. **Claude previously discovered the original three MCP tools and called `search_memory`**, returning `{"items":[]}` with no error (owner-reported live test). Claude has now discovered all five tools and successfully submitted a synthetic `propose_memory` record as `pending` (owner-reported test). Approval/rejection and `propose_memory_update` remain to be verified live; other clients are pending.
-- **Memory database:** empty by choice during integration setup; no production career facts should be published to this repository.
+- **Status:** Live Worker and dashboard. **Two-way ChatGPT ↔ Claude memory sharing verified November 5, 2026 (owner-reported):** both clients discovered five tools, submitted user-requested proposals, and retrieved owner-approved changes from the same database. Grok/Gemini remain unverified.
+- **Memory database:** contains a synthetic integration-test memory. Real career facts have not been imported as part of this verification.
 - **Email OTP:** Cloudflare Access integration code exists, but Access policy and passwordless browser sign-in are **not enabled**. The current login uses a private access key.
 
 The public endpoint does **not** mean private memory is publicly accessible: private API and MCP requests require configured credentials.
@@ -42,7 +42,7 @@ The public endpoint does **not** mean private memory is publicly accessible: pri
 - Queue AI-suggested facts for explicit owner approval or rejection.
 - Bulk import and JSON backup/export.
 - Rank approved career evidence against job descriptions using free keyword matching (not a generative model).
-- Separate owner and agent Bearer credentials, plus optional OAuth authorization-code/PKCE for hosted MCP clients (code complete; deployment pending).
+- Separate restricted Bearer credentials and deployed OAuth discovery/PKCE endpoints. The successful ChatGPT and Claude real-client connections used restricted Bearer headers; hosted-client OAuth sign-in is not verified.
 - Authenticated remote JSON-RPC MCP endpoint exposing **three read-only tools and two pending-proposal tools**:
   - `search_memory` — query source-linked, approved memories.
   - `get_memory` — fetch one approved memory by ID.
@@ -51,17 +51,21 @@ The public endpoint does **not** mean private memory is publicly accessible: pri
   - `propose_memory_update` — propose replacing an existing approved fact, with version checking and explicit owner approval.
 - GitHub Actions CI with unit tests, Worker smoke tests and D1 migration tests; manual Cloudflare deployment.
 
+## Verified cross-assistant workflow
+
+On November 5, 2026, the owner verified **Claude → Memory Hub → ChatGPT** and **ChatGPT → Memory Hub → Claude** using one synthetic record. Claude initially proposed, the owner approved and retrieved it. Claude then proposed a correction, which the owner approved using the explicit archived-memory recovery path. ChatGPT retrieved the same memory and later submitted correction proposal `57b7c291-cc87-4bec-8ad5-148239c1adab`; after owner approval, Claude retrieved memory `c6b82a21-761e-842b-845e-1516025adda5` with title **MCP Cross-Assistant Integration - Verified** and timestamp `2026-11-05T05:42:34.581Z`. Pending proposals never became trusted facts until owner approval. The product still needs a Grok integration and stronger production security testing.
+
 ## Assistant integration roadmap
 
 | Assistant | Path | Verified in real client? |
 |---|---|---|
 | **Grok** | Grok **Custom MCP Connector** or Grok Build remote HTTP MCP | **Not yet** |
-| **Claude** | Custom remote MCP with `No sign-in` + restricted `Authorization: Bearer …` request header | **Yes: tool discovery and `search_memory` (owner-reported)** |
-| **ChatGPT** | Custom Streamable HTTP MCP using restricted Bearer Authorization header | **Yes: all five tools discovered, search and get verified (owner-reported)** |
+| **Claude** | Custom remote MCP with restricted Bearer header | **Verified: create proposal, read, propose correction, and read ChatGPT-approved correction** |
+| **ChatGPT** | Custom Streamable HTTP MCP with restricted Bearer header | **Verified: five tools, search/read, propose correction, and Claude readback** |
 | **Gemini** | Compatible MCP client or adapter, subject to its available runtime | **Not yet** |
 | Other MCP clients | Streamable HTTP compatibility and credential configuration | **Not yet** |
 
-**Integration instructions:** [Grok](docs/GROK.md) · [MCP protocol and tests](docs/MCP.md). Passing CI proves the Worker behavior, **not** successful connection to any provider.
+**Integration instructions:** [Grok](docs/GROK.md) · [MCP protocol and tests](docs/MCP.md). CI verifies local/protocol behavior; cross-assistant results are separately supported by owner-reported real-client tool responses.
 
 ## Security architecture
 
@@ -71,12 +75,12 @@ The public endpoint does **not** mean private memory is publicly accessible: pri
 | Data store | Cloudflare D1 (SQLite) with revision tracking |
 | Browser session | Signed 12-hour HttpOnly cookie |
 | Optional browser SSO | Cloudflare Access email OTP (not yet enabled) |
-| MCP and REST API | HTTPS + owner/agent Bearer tokens; new owner-consented OAuth + PKCE for MCP only (deployment pending) |
+| MCP and REST API | Restricted Bearer credentials; OAuth + PKCE code deployed and endpoints probed, but hosted-client OAuth login unverified |
 | Memory integrity | Approved facts only; owner-reviewed new and correction proposals |
 | Evidence matching | Deterministic keyword overlap |
 | Agent access | Narrower than owner access; MCP can read approved records and submit pending proposals only |
 
-**OAuth support is committed but not yet deployed or verified from ChatGPT/Grok.** It adds DCR-based client registration, metadata discovery, signed-in owner consent, strict audience/scopes, and short-lived hashed access tokens. The Claude fixed-header integration remains supported. **Never paste or commit** API tokens, career records, private exports, or confidential employer data. Before connecting an external assistant, use a **separate `MEMORY_AGENT_TOKEN`**, not your dashboard's master key. Check which authentication schemes that assistant actually supports and do not bypass authentication for convenience.
+**OAuth is deployed but full hosted-client OAuth sign-in remains unverified.** It adds DCR-based client registration, metadata discovery, signed-in owner consent, strict audience/scopes, and short-lived hashed access tokens. The Claude fixed-header integration remains supported. **Never paste or commit** API tokens, career records, private exports, or confidential employer data. Before connecting an external assistant, use a **separate `MEMORY_AGENT_TOKEN`**, not your dashboard's master key. Check which authentication schemes that assistant actually supports and do not bypass authentication for convenience.
 
 ## Local development
 
