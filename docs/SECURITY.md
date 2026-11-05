@@ -23,7 +23,7 @@ The repository is **public code only**. Personal memories and credentials stay i
 
 ## Outstanding risks
 
-Third-party connector auth compatibility; OAuth/authorization scope and refresh; rate limiting, key rotation, token leakage/replay, quotas and resource exhaustion, backups and restoration, prompt injection and proposal spam, production traffic monitoring, browser CSRF edge cases, and multi-user isolation (not implemented).
+Third-party connector auth compatibility; production OAuth user-flow review, one-hour token expiry without refresh, public DCR registration quota exhaustion, token revocation and abuse mitigation; rate limiting, key rotation, token leakage/replay, quotas and resource exhaustion, backups and restoration, prompt injection and proposal spam, production traffic monitoring, browser CSRF edge cases, and multi-user isolation (not implemented).
 
 Before adding private facts, complete live auth tests, an independent security review and backup/recovery validation.
 
@@ -32,3 +32,12 @@ Before adding private facts, complete live auth tests, an independent security r
 ### Archived memory corrections
 
 Ordinary correction approval refuses archived memories. In the dashboard, an archived target is explicitly labeled **Archived target** and normal approval is replaced with the owner-only **Restore archived memory and approve correction** action. That distinct action intentionally reactivates the archived memory, applies the reviewed correction in a D1 transactional batch, and appends a revision. It must never be triggered by an MCP agent, a normal approval, or without an explicit owner click. Stale approved records are still blocked and require a fresh proposal.
+
+## OAuth experimental integration (code committed, deployment pending)
+
+- Public DCR uses fixed 100-client registration quota and strict HTTPS/loopback-HTTP redirect allowlisting. Registration is intentionally public for client interoperability, so rate limiting and abuse mitigation remain outstanding.
+- Owner consent requires a signed session obtained by the owner's access key. The UI shows the registered client name, redirect destination and requested permissions before issuing a code. No assistant receives the owner's key.
+- Authorization codes expire after five minutes and are bound to the client, exact callback URI, OAuth resource and PKCE S256 challenge. Reuse is rejected.
+- Bearer access tokens are random, SHA-256-hashed at rest, audience-bound to `/mcp`, scope-checked, and expire after one hour. No refresh tokens or revocation UI exist yet.
+- Legacy agent Bearer authentication is preserved; OAuth access tokens cannot access owner-only REST/dashboard endpoints.
+- **This does not certify production security.** Do not import sensitive personal records until real-client integration and independent security/abuse reviews pass.
