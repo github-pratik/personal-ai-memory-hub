@@ -215,6 +215,11 @@ assert.match(unauthorizedMcp.headers.get('www-authenticate')||'',/oauth-protecte
 
 // Hosts can discover OAuth-protected tool schemas before user authentication.
 // Discovery must NOT allow any private memory read or pending write.
+const optionalGet=await fetch(base+'/mcp');
+assert.equal(optionalGet.status,405);
+assert.equal(optionalGet.headers.get('allow'),'POST');
+const optionalDelete=await fetch(base+'/mcp',{method:'DELETE'});
+assert.equal(optionalDelete.status,405);
 const unauthInit=await fetch(base+'/mcp',{method:'POST',headers:{'content-type':'application/json'},
  body:JSON.stringify({jsonrpc:'2.0',id:100,method:'initialize',params:{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'anonymous',version:'1'}}})});
 assert.equal(unauthInit.status,200);
