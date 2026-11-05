@@ -209,6 +209,16 @@ const authDoc=await authMetadata.json();
 assert.equal(authDoc.issuer,base);
 assert.deepEqual(authDoc.code_challenge_methods_supported,['S256']);
 assert.equal(authDoc.token_endpoint_auth_methods_supported[0],'none');
+// Grok must be challenged on its first initialize request, not silently
+// treated as connected from anonymous tool discovery.
+const grokProtected=await fetch(base+'/.well-known/oauth-protected-resource/grok/mcp');
+assert.equal(grokProtected.status,200);
+assert.equal((await grokProtected.json()).resource,base+'/grok/mcp');
+const grokInit=await fetch(base+'/grok/mcp',{method:'POST',
+ headers:{'content-type':'application/json'},
+ body:JSON.stringify({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'Grok',version:'1'}}})});
+assert.equal(grokInit.status,401);
+assert.match(grokInit.headers.get('www-authenticate')||'',/oauth-protected-resource\\/grok\\/mcp/);
 const unauthorizedMcp=await fetch(base+'/mcp',{method:'POST',headers:{'content-type':'application/json'},body:'{}'});
 assert.equal(unauthorizedMcp.status,401);
 assert.match(unauthorizedMcp.headers.get('www-authenticate')||'',/oauth-protected-resource/);
@@ -258,6 +268,22 @@ const challenge=createHash('sha256').update(verifier).digest('base64url');
 const authQuery=new URLSearchParams({response_type:'code',client_id:registered.client_id,redirect_uri:callback,
  code_challenge:challenge,code_challenge_method:'S256',state:'a-random-csrf-state',
  scope:'memory:read memory:propose',resource:base+'/mcp'});
+// Grok's published OAuth identity is a pinned public client with exact
+// redirect validation. It does not require a private client secret.
+const grokAuthQuery=new URLSearchParams(authQuery);
+grokAuthQuery.set('client_id','https://grok.com/oauth/mcp-client.json');
+grokAuthQuery.set('redirect_uri','https://grok.com/connectors-oauth-exchange-code/');
+grokAuthQuery.set('resource',base+'/grok/mcp');
+const grokAuthStart=await fetch(base+'/oauth/authorize?'+grokAuthQuery);
+assert.equal(grokAuthStart.status,200);
+assert.match(await grokAuthStart.text(),/Sign in to your private Memory Hub/);
+const grokBadRedirect=new URLSearchParams(grokAuthQuery);
+grokBadRedirect.set('redirect_uri','https://attacker.example/cb');
+const grokRejected=await fetch(base+'/oauth/authorize?'+grokBadRedirect);
+assert.match(await grokRejected.text(),/Invalid authorization request/);
+const grokWrongResource=new URLSearchParams(grokAuthQuery);
+grokWrongResource.set('resource','https://attacker.example/mcp');
+assert.match(await (await fetch(base+'/oauth/authorize?'+grokWrongResource)).text(),/Invalid authorization request/);
 const authorizationUrl=base+'/oauth/authorize?'+authQuery;
 const startNoCookie=await fetch(authorizationUrl);
 assert.equal(startNoCookie.status,200);
