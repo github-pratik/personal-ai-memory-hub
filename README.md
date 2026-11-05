@@ -65,6 +65,7 @@ Our $0/month goal assumes workloads remain within provider free-tier allowances;
 - [Deployment and one-time account setup](docs/DEPLOYMENT.md)
 - [Remote MCP protocol](docs/MCP.md)
 - [Security model](docs/SECURITY.md)
+- [Cloudflare Access email OTP setup](docs/CLOUDFLARE_ACCESS_OTP.md)
 - [Agent development instructions](AGENTS.md)
 - [Cloudflare agent skills and management MCP](docs/CLOUDFLARE_AGENT_TOOLS.md)
 - [Issues and roadmap](https://github.com/github-pratik/personal-ai-memory-hub/issues)
@@ -74,7 +75,7 @@ Our $0/month goal assumes workloads remain within provider free-tier allowances;
 - **Never commit** personal memories, resumes, access tokens, work-confidential data or production exports.
 - AI suggestions are pending until the owner approves them.
 - Bearer-authenticated MCP is implemented, but **ChatGPT, Claude and Grok connectivity is not yet universally verified** and may require OAuth support.
-- The current login design is suitable for personal MVP evaluation, not an audited multi-user product.
+- The default login is a private access key. Optional Cloudflare Access email OTP is implemented behind a secure, opt-in rollout; it is not active until an account owner configures the Cloudflare Access policy and deployment settings. This is not an audited multi-user product.
 - A production security and quota review is still required.
 
 ## License
