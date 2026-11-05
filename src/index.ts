@@ -151,6 +151,42 @@ const worker = {
         const result=await env.DB.prepare('SELECT * FROM memory_proposals WHERE status=? ORDER BY created_at DESC LIMIT ?').bind(status,safeLimit(url.searchParams.get('limit'))).all();
         return json({items:result.results});
       }
+      // Explicit recovery only: an archived record must never be silently reactivated
+      // by the ordinary approve-correction action.
+      const restoreDecision=path.match(/^\/v1\/memory-updates\/([^/]+)\/restore-approve$/);
+      if(restoreDecision && method==='POST'){
+        const proposalId=restoreDecision[1];
+        if(!validId(proposalId))return err('Invalid ID',400);
+        const p=await env.DB.prepare('SELECT * FROM memory_update_proposals WHERE id=?').bind(proposalId).first<{
+          id:string;memory_id:string;title:string;body:string;category:string;source:string;status:string
+        }>();
+        if(!p)return err('Not found',404);
+        if(p.status==='approved')return json({id:proposalId,status:'approved',memory_id:p.memory_id,already_applied:true});
+        if(p.status!=='pending')return err('Already decided',409);
+        const current=await env.DB.prepare('SELECT state,updated_at FROM memories WHERE id=?').bind(p.memory_id).first<{state:string;updated_at:string}>();
+        if(!current)return err('Original memory was not found',404);
+        if(current.state!=='archived')return err('Memory is not archived. Use normal approval if it is still approved.',409);
+        const date=now();
+        // D1 batches are atomic: restoring and applying the explicitly reviewed
+        // correction must succeed together or neither becomes authoritative.
+        const batch=await env.DB.batch([
+          env.DB.prepare(`UPDATE memories SET title=?,body=?,category=?,source=?,state='approved',updated_at=?
+            WHERE id=? AND state='archived' AND updated_at=?
+            AND EXISTS (SELECT 1 FROM memory_update_proposals WHERE id=? AND status='pending')`)
+            .bind(p.title,p.body,p.category,p.source,date,p.memory_id,current.updated_at,proposalId),
+          env.DB.prepare(`UPDATE memory_update_proposals SET status='approved',decided_at=?
+            WHERE id=? AND status='pending'
+            AND EXISTS (SELECT 1 FROM memories WHERE id=? AND state='approved' AND updated_at=?)`)
+            .bind(date,proposalId,p.memory_id,date),
+          env.DB.prepare(`INSERT INTO memory_revisions (id,memory_id,title,body,category,source,changed_at,action)
+            SELECT ?,id,title,body,category,source,?,'update' FROM memories
+            WHERE id=? AND state='approved' AND updated_at=?
+            AND EXISTS (SELECT 1 FROM memory_update_proposals WHERE id=? AND status='approved')`)
+            .bind(crypto.randomUUID(),date,p.memory_id,date,proposalId)
+        ]);
+        if(batch[0].meta.changes!==1||batch[1].meta.changes!==1)return err('Restoration conflicted with another update; refresh before retrying.',409);
+        return json({id:proposalId,status:'approved',memory_id:p.memory_id,restored:true});
+      }
       const updateDecision=path.match(/^\/v1\/memory-updates\/([^/]+)\/(approve|reject)$/);
       if(updateDecision && method==='POST'){
         const [,proposalId,action]=updateDecision;
