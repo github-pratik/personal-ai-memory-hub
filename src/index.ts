@@ -151,6 +151,38 @@ const worker = {
         const result=await env.DB.prepare('SELECT * FROM memory_proposals WHERE status=? ORDER BY created_at DESC LIMIT ?').bind(status,safeLimit(url.searchParams.get('limit'))).all();
         return json({items:result.results});
       }
+      const updateDecision=path.match(/^\/v1\/memory-updates\/([^/]+)\/(approve|reject)$/);
+      if(updateDecision && method==='POST'){
+        const [,proposalId,action]=updateDecision;
+        if(!validId(proposalId))return err('Invalid ID',400);
+        const p=await env.DB.prepare('SELECT * FROM memory_update_proposals WHERE id=?').bind(proposalId).first<{
+          id:string;memory_id:string;target_updated_at:string;title:string;body:string;category:string;source:string;status:string
+        }>();
+        if(!p)return err('Not found',404);
+        if(p.status!=='pending')return err('Already decided',409);
+        const timestamp=now();
+        if(action==='reject'){
+          const result=await env.DB.prepare("UPDATE memory_update_proposals SET status='rejected',decided_at=? WHERE id=? AND status='pending'")
+             .bind(timestamp,proposalId).run();
+          return result.meta.changes===1?json({id:proposalId,status:'rejected'}):err('Already decided',409);
+        }
+        // Concurrency guard: only apply if the approved record is still at the reviewed version.
+        // The following D1 batch is transactional. If the target was modified, no mutation happens.
+        const batch=await env.DB.batch([
+          env.DB.prepare(`UPDATE memories SET title=?,body=?,category=?,source=?,updated_at=? WHERE id=? AND state='approved'
+            AND updated_at=? AND EXISTS (SELECT 1 FROM memory_update_proposals WHERE id=? AND status='pending')`)
+             .bind(p.title,p.body,p.category,p.source,timestamp,p.memory_id,p.target_updated_at,proposalId),
+          env.DB.prepare(`UPDATE memory_update_proposals SET status='approved',decided_at=? WHERE id=? AND status='pending'
+            AND EXISTS (SELECT 1 FROM memories WHERE id=? AND updated_at=?)`)
+             .bind(timestamp,proposalId,p.memory_id,timestamp),
+          env.DB.prepare(`INSERT INTO memory_revisions (id,memory_id,title,body,category,source,changed_at,action)
+            SELECT ?,id,title,body,category,source,?,'update' FROM memories
+            WHERE id=? AND updated_at=? AND EXISTS (SELECT 1 FROM memory_update_proposals WHERE id=? AND status='approved')`)
+             .bind(crypto.randomUUID(),timestamp,p.memory_id,timestamp,proposalId)
+        ]);
+        if(batch[0].meta.changes!==1||batch[1].meta.changes!==1)return err('Target memory changed since this proposal. Submit a new correction.',409);
+        return json({id:proposalId,status:'approved',memory_id:p.memory_id});
+      }
       const decision=path.match(/^\/v1\/proposals\/([^/]+)\/(approve|reject)$/);
       if(decision && method==='POST'){
         const [,proposalId,action]=decision;
