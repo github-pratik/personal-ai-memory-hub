@@ -14,6 +14,8 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       MEMORY_API_TOKEN: ${{ secrets.MEMORY_API_TOKEN }}
       MEMORY_AGENT_TOKEN: ${{ secrets.MEMORY_AGENT_TOKEN }}
+      ACCESS_REQUIRED: ${{ vars.ACCESS_REQUIRED }}
+      ACCESS_ALLOWED_EMAIL: ${{ secrets.ACCESS_ALLOWED_EMAIL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,6 +25,9 @@ jobs:
         run: |
           test -n "$CLOUDFLARE_API_TOKEN" || (echo "Cloudflare token not configured"; exit 1)
           test "${#MEMORY_API_TOKEN}" -ge 32 || (echo "Missing strong MEMORY_API_TOKEN"; exit 1)
+          if [ "$ACCESS_REQUIRED" = "true" ]; then
+            test -n "$ACCESS_ALLOWED_EMAIL" || (echo "Access mode requires ACCESS_ALLOWED_EMAIL"; exit 1)
+          fi
       - run: npm install --no-audit --no-fund
       - run: npm run check
       - name: Apply migrations to D1
@@ -34,5 +39,10 @@ jobs:
       - name: Configure agent token if supplied
         if: env.MEMORY_AGENT_TOKEN != ''
         run: printf '%s' "$MEMORY_AGENT_TOKEN" | npx wrangler secret put MEMORY_AGENT_TOKEN
+      - name: Configure Access mode only when Access policy exists
+        if: env.ACCESS_REQUIRED == 'true'
+        run: |
+          printf '%s' "$ACCESS_ALLOWED_EMAIL" | npx wrangler secret put ACCESS_ALLOWED_EMAIL
+          printf 'true' | npx wrangler secret put ACCESS_REQUIRED
       - name: Done
         run: echo "Deployed using pre-authorized Cloudflare account. Check Cloudflare dashboard for the workers.dev URL and usage."
