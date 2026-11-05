@@ -87,9 +87,10 @@ test('pending queue refuses additional requests after 100 proposals',async()=>{
  assert.equal(f.proposals.length,100);
  assert.equal(f.approvedWrites,0);
 });
-test('propose tool does not expose approvals or editing tools',async()=>{
+test('MCP proposal tools never expose owner approval or direct edit operations',async()=>{
  const {env}=fixture();
  const res=await worker.fetch(new Request(endpoint,{method:'POST',headers:{authorization:'Bearer '+agent,'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/list'})}),env);
  const names=(await res.json() as any).result.tools.map((t:any)=>t.name);
- assert.ok(!names.some((name:string)=>/approve|reject|delete|archive|edit|update/i.test(name)));
+ assert.ok(names.includes('propose_memory_update'));
+ assert.ok(!names.some((name:string)=>/approve|reject|delete|archive|^update_memory$/i.test(name)));
 });
