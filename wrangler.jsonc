@@ -6,7 +6,7 @@
   "d1_databases": [{
     "binding": "DB",
     "database_name": "memory-hub",
-    "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID",
+    "database_id": "c0f7dff1-4ade-4f24-ba02-969efcd61b93",
     "migrations_dir": "migrations"
   }]
 }
