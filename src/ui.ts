@@ -1,7 +1,7 @@
 import { authorized, validateMemoryInput } from './domain';
 import { COOKIE_NAME, getCookie, issueSession, removeSessionHeaders, sessionHeaders, validFormOrigin, verifySession } from './session';
 
-interface Env {DB:D1Database;MEMORY_API_TOKEN:string}
+interface Env {DB:D1Database;MEMORY_API_TOKEN:string; ACCESS_REQUIRED?:string; ACCESS_ALLOWED_EMAIL?:string}
 type InternalApi=(path:string,method:string,body?:unknown)=>Promise<Response>;
 type Row={id:string;title:string;body:string;category:string;source:string;status?:string;created_at:string;updated_at?:string};
 
@@ -33,10 +33,10 @@ function card(r:Row,proposal=false):string{
  const actions=proposal?`<div class="row"><form action="/ui/proposals/${e(r.id)}/approve" method="post"><button type="submit">Approve</button></form><form action="/ui/proposals/${e(r.id)}/reject" method="post"><button class="secondary" type="submit">Reject</button></form></div>`:`<form action="/ui/memories/${e(r.id)}/archive" method="post"><button class="secondary" type="submit">Archive</button></form>`;
  return `<article class="item"><div class="row spaced"><h3>${e(r.title)}</h3><span class="tag">${e(r.category)}</span></div><p class="body">${e(r.body)}</p><p class="muted"><small>Source: ${e(r.source)}</small></p>${actions}</article>`;
 }
-function dashboard(memories:Row[],proposals:Row[],q:string):Response{
+function dashboard(memories:Row[],proposals:Row[],q:string,accessMode=false):Response{
  const memoryList=memories.map(r=>card(r)).join('')||'<p class="muted">No matching memories yet. Add verified evidence below.</p>';
  const proposalList=proposals.map(r=>card(r,true)).join('')||'<p class="muted">No pending proposals.</p>';
- return page(`<header><div><h1>Personal AI Memory Hub</h1><small>Career evidence and project history · private workspace</small></div><div class="row"><a class="button secondary" href="/export">Export backup</a><form action="/logout" method="post"><button class="secondary">Sign out</button></form></div></header>
+ return page(`<header><div><h1>Personal AI Memory Hub</h1><small>Career evidence and project history · private workspace</small></div><div class="row"><a class="button secondary" href="/export">Export backup</a>${accessMode?'<a class="button secondary" href="/cdn-cgi/access/logout">Sign out</a>':'<form action="/logout" method="post"><button class="secondary">Sign out</button></form>'}</div></header>
  <section class="card" style="margin-bottom:20px"><h2>Match experience to a job description</h2><p class="muted">Paste a job description to rank verified experience and projects without paid AI calls. Nothing is saved.</p><form method="post" action="/ui/job-match"><label>Job description</label><textarea name="job_description" required minlength="15" maxlength="12000" placeholder="Paste the role requirements here"></textarea><p><button>Find matching experience</button></p></form></section>
  <section class="search card"><h2>Search verified memories</h2><form action="/" method="get" class="row"><input name="q" placeholder="Try Python, Slack, PostgreSQL or a job requirement" value="${e(q)}" maxlength="200"><button>Search</button></form></section>
  <div class="grid"><section class="card"><div class="row spaced"><h2>Verified memories (${memories.length})</h2><span class="tag">Approved</span></div>${memoryList}</section>
@@ -53,22 +53,24 @@ async function records(db:D1Database,table:string):Promise<unknown[]>{
  }
  throw new Error('Export exceeds supported record limit');
 }
-export async function handleUi(request:Request,env:Env,internal:InternalApi):Promise<Response|null>{
+export async function handleUi(request:Request,env:Env,internal:InternalApi,accessAuthorized=false):Promise<Response|null>{
  const url=new URL(request.url),path=url.pathname,method=request.method;
  if(!['/','/login','/logout','/export'].includes(path)&&!path.startsWith('/ui/'))return null;
- if(path==='/login'&&method==='POST'){
+ if(env.ACCESS_REQUIRED==='true'&&!accessAuthorized)return simpleError('Cloudflare Access authentication required',403);
+ if(env.ACCESS_REQUIRED==='true'&&path==='/login')return redirect('/');
+ if(env.ACCESS_REQUIRED!=='true'&&path==='/login'&&method==='POST'){
    if(!validFormOrigin(request))return simpleError('Origin validation failed',403);
    const form=await request.formData(),key=String(form.get('secret')||'');
    if(!authorized('Bearer '+key,env.MEMORY_API_TOKEN))return loginPage(true);
    return redirect('/',sessionHeaders(await issueSession(env.MEMORY_API_TOKEN)));
  }
- const session=await verifySession(getCookie(request.headers.get('cookie'),COOKIE_NAME),env.MEMORY_API_TOKEN);
+ const session=env.ACCESS_REQUIRED==='true'&&accessAuthorized || await verifySession(getCookie(request.headers.get('cookie'),COOKIE_NAME),env.MEMORY_API_TOKEN);
  if(!session){
    if(method==='GET'&&(path==='/'||path==='/login'))return loginPage();
    return redirect('/');
  }
  if(method==='POST'&&!validFormOrigin(request))return simpleError('Origin validation failed',403);
- if(path==='/logout'&&method==='POST')return redirect('/',removeSessionHeaders);
+ if(path==='/logout'&&method==='POST')return env.ACCESS_REQUIRED==='true'?redirect('/cdn-cgi/access/logout'):redirect('/',removeSessionHeaders);
  if(path==='/export'&&method==='GET'){
    try{
      const [memories,revisions,proposals]=await Promise.all([
@@ -133,7 +135,7 @@ export async function handleUi(request:Request,env:Env,internal:InternalApi):Pro
      const sql="SELECT id,title,body,category,source,created_at,updated_at FROM memories WHERE state='approved'"+(q?' AND (instr(lower(title),lower(?))>0 OR instr(lower(body),lower(?))>0)':'')+" ORDER BY updated_at DESC LIMIT 100";
      const mem=await env.DB.prepare(sql).bind(...(q?[q,q]:[])).all<Row>();
      const prop=await env.DB.prepare("SELECT id,title,body,category,source,created_at FROM memory_proposals WHERE status='pending' ORDER BY created_at DESC LIMIT 100").all<Row>();
-     return dashboard(mem.results,prop.results,q);
+     return dashboard(mem.results,prop.results,q,env.ACCESS_REQUIRED==='true');
    }catch{return simpleError('Dashboard unavailable',500)}
  }
  return simpleError('Not found',404);
