@@ -1,25 +1,43 @@
-# MVP v1.1
+# Product vision and MVP
 
-**Product:** Cloud-accessible personal memory, backed by a source-aware data store and securely queryable by compatible AI clients.
+## Mission
+
+**One user-controlled, private memory hub for many AI assistants.** The same approved facts should be searchable from ChatGPT, Claude, Grok, Gemini and other compatible clients. Users should not repeatedly re-enter career history, projects or preferences into separate services.
+
+The private dashboard is a management interface. Resume tailoring is an important first use case, **not the entire product**.
 
 ## Non-negotiables
-- $0/month target, no automatic charges.
-- Public source, private memories and secrets.
-- User reviews AI-suggested additions.
-- Cross-device access.
-- Exportable, versioned data.
-- No fake credentials, metrics or career accomplishments.
 
-## MVP phases
-1. Foundation: repository, migrations, protected Worker, tests and CI.
-2. Memory API: create/list/search/update/archive; preserve revisions.
-3. Private dashboard, strong authentication and approval UI.
-4. Data exports and tested restore.
-5. Read-only remote MCP, OAuth, client compatibility testing.
-6. Resume-aware retrieval and source integrity evaluation.
+- Public repository, private production facts and secrets.
+- $0/month hosting target within free-tier limits. No automatic paid LLM calls.
+- Owner approves proposed facts before they become trusted evidence.
+- Read-only agent retrieval by default; no automatic approval or rewriting.
+- Source-aware data, revision history, exports and backups.
+- No fabricated jobs, project metrics, qualifications, or experience.
+- Separate access levels for owner versus external assistant.
 
-## Explicitly out of scope
-Automatic sync of proprietary AI-provider memory, paid inference, company-wide search, full Omni deployment, Redis as a mandatory service, unattended writes to personal fact records.
+## Shipped in code
+
+1. Cloudflare Workers TypeScript API, D1 database and migrations.
+2. Signed-session private browser dashboard, memory CRUD/archive and versioning.
+3. Proposed fact approval queue, import and backup export.
+4. Keyword-based resume/job evidence matching.
+5. Authenticated JSON-RPC MCP server with three read-only tools.
+6. Tests, CI, and manual Cloudflare deployment.
+
+## Current milestone: client interoperability
+
+- Provision a **separate** restricted agent credential.
+- Verify `initialize`, `tools/list`, `tools/call` on hosted MCP using a real compatible client.
+- Test Grok, Claude, ChatGPT and Gemini individually and document actual auth/transport behavior.
+- Where necessary, implement standards-compliant OAuth, compatibility features and secure scopes.
+- Verify that clients cannot read without authorization or modify approved facts.
+- Only then import private personal memories.
+
+## Explicitly not promised
+
+Universal provider support, automatic synchronization of proprietary AI-provider memories, a paid model router, a completed OAuth server, cross-provider agent identity federation, or an independently audited product.
 
 ## Release gates
-No public production launch until auth, permissions, auditability, quotas, backups and smoke tests pass. The current single-user Bearer token is **development-only**, not a substitute for production OAuth or a secure browser session.
+
+Passing CI and successful Worker deployment alone do not establish secure multi-provider integration. Require authenticated end-to-end tests, rejection of unauthorized calls, source integrity, backup recovery, and quota/security review.
