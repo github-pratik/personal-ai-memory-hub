@@ -62,7 +62,7 @@ const worker = {
       if(oauth)return oauth;
     }
     // A scoped, short-lived OAuth token authorizes MCP only, never REST owner routes.
-    if(path==='/mcp'){
+    if(path==='/mcp'||path==='/grok/mcp'){
       // Stateless Streamable HTTP supports POST only. Clients probing GET or
       // DELETE for an optional SSE stream should receive 405, not an auth denial.
       if(method==='GET'||method==='DELETE')return new Response(null,{
@@ -72,6 +72,17 @@ const worker = {
       const staticRole=roleOf(request.headers.get('authorization'),env);
       const scopes=staticRole?null:await oauthScopes(request,env);
       if(!staticRole&&!scopes){
+        // Grok must receive the protected-resource challenge on the FIRST
+        // request. Anonymous discovery on /mcp causes Grok to show "Connected"
+        // without ever launching OAuth, then fail its subsequent tool call.
+        // Keep legacy /mcp discovery for existing ChatGPT/Claude clients.
+        if(path==='/grok/mcp')return new Response(JSON.stringify({error:'authentication_required'}),{
+          status:401,headers:{
+            'content-type':'application/json; charset=utf-8',
+            'cache-control':'no-store',
+            'www-authenticate':oauthChallenge(request)
+          }
+        });
         // Public MCP discovery exposes schemas only, never memory content. ChatGPT
         // needs to inspect these OAuth-protected tools before the login flow.
         // No authenticated tools/call may execute through this path.
