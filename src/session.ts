@@ -36,6 +36,17 @@ export const removeSessionHeaders={
  'set-cookie':`${COOKIE_NAME}=; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0`
 };
 export function validFormOrigin(request:Request):boolean{
+ const target=new URL(request.url);
+ if(target.protocol!=='https:' && target.hostname!=='localhost' && target.hostname!=='127.0.0.1')return false;
  const origin=request.headers.get('origin');
- return origin!==null && origin===new URL(request.url).origin;
+ // A supplied Origin must match exactly; never fall back from an invalid Origin.
+ if(origin!==null)return origin===target.origin;
+ // Some browsers and privacy tools omit Origin on form navigations.
+ // Only allow an explicitly same-origin Referer when Origin is absent.
+ const referer=request.headers.get('referer');
+ if(!referer)return false;
+ try{
+   const source=new URL(referer);
+   return source.origin===target.origin && ['http:','https:'].includes(source.protocol);
+ }catch{return false}
 }
