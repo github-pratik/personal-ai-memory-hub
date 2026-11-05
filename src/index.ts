@@ -162,15 +162,15 @@ const worker = {
         // Repeated approval can arrive after the first request was committed.
         if(p.status==='approved' && action==='approve')return json({id:proposalId,status:'approved',memory_id:p.memory_id,already_applied:true});
         if(p.status!=='pending')return err('Already decided',409);
-        const current=await env.DB.prepare("SELECT updated_at,state FROM memories WHERE id=?").bind(p.memory_id).first<{updated_at:string;state:string}>();
-        if(!current||current.state!=='approved')return err('Target memory is no longer approved',409);
-        if(current.updated_at!==p.target_updated_at)return err('Target memory was changed after this correction was proposed. Please submit a new correction.',409);
         const timestamp=now();
         if(action==='reject'){
           const result=await env.DB.prepare("UPDATE memory_update_proposals SET status='rejected',decided_at=? WHERE id=? AND status='pending'")
              .bind(timestamp,proposalId).run();
           return result.meta.changes===1?json({id:proposalId,status:'rejected'}):err('Already decided',409);
         }
+        const current=await env.DB.prepare("SELECT updated_at,state FROM memories WHERE id=?").bind(p.memory_id).first<{updated_at:string;state:string}>();
+        if(!current||current.state!=='approved')return err('Target memory is no longer approved',409);
+        if(current.updated_at!==p.target_updated_at)return err('Target memory was changed after this correction was proposed. Please submit a new correction.',409);
         // Concurrency guard: only apply if the approved record is still at the reviewed version.
         // The following D1 batch is transactional. If the target was modified, no mutation happens.
         const batch=await env.DB.batch([
