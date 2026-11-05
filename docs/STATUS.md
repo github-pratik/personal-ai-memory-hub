@@ -1,30 +1,31 @@
 # Engineering status
 
-Updated: November 4, 2026.
+Updated: November 4, 2026 (US Eastern).
 
-## Implemented in repository
-- Browser dashboard (signed HttpOnly cookie sessions, origin-checked forms).
-- Memory create, search, update, archive with D1 revisions.
-- Bulk verified-memory import (up to 25 per request, deterministic IDs).
-- AI-suggested proposal queue, owner approve/reject actions.
-- Job-description matching against approved experience/projects (free deterministic ranking).
-- Private JSON backup export.
-- Read-only remote MCP protocol endpoint (Bearer auth, three retrieval tools).
-- Role separation for owner versus agent tokens.
-- D1 migrations and unit/API/end-to-end smoke tests in GitHub Actions.
-- Manual Cloudflare deployment workflow, public source, MIT license, GitHub issue backlog.
+## Verified
 
-## Verification
-- CI includes TypeScript checks, tests, D1 local migrations and Worker HTTP smoke tests.
-- **Check the latest GitHub Actions run for its actual result.**
-- No remote deployment performed. No Cloudflare credentials or real personal data have been committed.
+- Cloudflare Worker deployed at https://personal-ai-memory-hub.p-pshpatil.workers.dev.
+- Deployment #4 included the login-origin fix and succeeded; owner verified the login and dashboard in a browser.
+- Cloudflare D1 migrations applied. Owner key is configured privately.
+- Browser dashboard supports approved memory management, proposals, import/export, and job matching.
+- Read-only MCP endpoint exists at `/mcp` with `search_memory`, `get_memory`, and `match_job`.
+- Unit, TypeScript, D1 local migration, and Worker smoke tests passed on the current tested release.
 
-## Still required for production use
-- Cloudflare account connection, D1 provisioning, owner login secret, deployment.
-- Independent production security review; rate limiting and backup-restoration tests.
-- Client-specific MCP OAuth compatibility.
-- Personal data import through the private dashboard, not through GitHub.
-- Verified end-user tests from two different devices.
+## Main project goal
 
-## Product priority
-Job-application evidence retrieval first. Zero-cost target, accurate professional facts, private data, cross-device operation.
+A **single private source of truth** for ChatGPT, Claude, Grok, Gemini and compatible MCP clients. The browser dashboard supports the same data store. **Cross-assistant interoperability is the primary product priority**; job application evidence retrieval is one use case.
+
+The owner chose to leave production memories empty until integrations are validated.
+
+## Not yet verified / still to do
+
+1. Add a separate restricted `MEMORY_AGENT_TOKEN` to GitHub's `production` environment secrets and run a **new** manual deployment on current `main`. Do not share the owner key.
+2. Test authenticated remote MCP discovery and tool calls against the live Worker.
+3. Connect Grok with its custom MCP connector and verify authentication and `tools/list` behavior. See [Grok setup](GROK.md).
+4. Connect Claude, ChatGPT (subject to account support) and Gemini, adapting auth safely where necessary.
+5. Enable Cloudflare Access email OTP for browser sign-in (optional, not yet configured).
+6. Perform live abuse/security, quota, session, backup and restore testing before adding sensitive data.
+
+An implemented MCP endpoint is **not** proof that any named assistant is already connected. Never disable authentication to bypass connector limitations.
+
+See [MCP integration](MCP.md), [Security](SECURITY.md) and [Grok](GROK.md).
