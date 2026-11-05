@@ -9,6 +9,7 @@ Updated: November 4, 2026 (US Eastern).
 - Cloudflare D1 migrations applied. Owner key is configured privately.
 - Browser dashboard supports approved memory management, proposals, import/export, and job matching.
 - Read-only MCP endpoint exists at `/mcp` with `search_memory`, `get_memory`, and `match_job`.
+- **Claude live MCP test (reported by owner):** connector discovered all three tool descriptions, called `search_memory` with `query: "Python"`, and received `{"items":[]}` without an error. This validates that one external AI client can read from the empty approved-memory store; it does not validate all tool calls, writes, or other clients.
 - Unit, TypeScript, D1 local migration, and Worker smoke tests passed on the current tested release.
 
 ## Main project goal
@@ -20,12 +21,12 @@ The owner chose to leave production memories empty until integrations are valida
 ## Not yet verified / still to do
 
 1. Add a separate restricted `MEMORY_AGENT_TOKEN` to GitHub's `production` environment secrets and run a **new** manual deployment on current `main`. Do not share the owner key.
-2. Test authenticated remote MCP discovery and tool calls against the live Worker.
-3. Connect Grok with its custom MCP connector and verify authentication and `tools/list` behavior. See [Grok setup](GROK.md).
+2. Extend the successful Claude integration test to `match_job` and unauthorized access/security tests; verify any remaining HTTP transport edge cases.
+3. Connect Grok with its custom MCP connector; its current onboarding requested OAuth credentials, which our endpoint does not implement yet. See [Grok setup](GROK.md).
 4. Connect Claude, ChatGPT (subject to account support) and Gemini, adapting auth safely where necessary.
 5. Enable Cloudflare Access email OTP for browser sign-in (optional, not yet configured).
 6. Perform live abuse/security, quota, session, backup and restore testing before adding sensitive data.
 
-An implemented MCP endpoint is **not** proof that any named assistant is already connected. Never disable authentication to bypass connector limitations.
+Claude is the **first owner-verified integration**. Other assistants are not verified connected. Never disable authentication to bypass connector limitations.
 
 See [MCP integration](MCP.md), [Security](SECURITY.md) and [Grok](GROK.md).
