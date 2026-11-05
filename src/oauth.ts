@@ -19,7 +19,14 @@ const approvedResource=(request:Request,resource:string)=>resource===new URL('/m
 // metadata at https://grok.com/oauth/mcp-client.json (verified 2026-11-05).
 // This is a trusted, preconfigured public OAuth client, not an open CIMD fetch.
 const GROK_CLIENT_ID='https://grok.com/oauth/mcp-client.json';
-const GROK_CALLBACKS=['https://grok.com/connectors-oauth-exchange-code/','https://console.x.ai/connectors-oauth-exchange-code/'];
+const GROK_CALLBACKS=['https://grok.com/connectors-oauth-exchange-code/','https://grok.com/connectors-oauth-exchange-code','https://console.x.ai/connectors-oauth-exchange-code/'];
+// Audit protocol *steps* without printing access tokens, codes, PKCE, state,
+// owner keys or full URLs (which could contain sensitive query parameters).
+function oauthAudit(stage:string,fields:Record<string,string|boolean>={}){
+ console.info('oauth_flow',JSON.stringify({stage,...fields}));
+}
+function clientKind(id:string){return id===GROK_CLIENT_ID?'grok_pinned':/^[0-9a-f-]{36}$/i.test(id)?'registered':'unknown'}
+function callbackPath(uri:string){try{const u=new URL(uri);return u.origin+u.pathname}catch{return 'invalid'}}
 const issuerFor=(request:Request)=>new URL(request.url).origin;
 const scopeSet=['memory:read','memory:propose'];
 function allowedScope(s:string){const scopes=s.split(' ').filter(Boolean);return scopes.length>0 && scopes.length<=2 && new Set(scopes).size===scopes.length && scopes.every(v=>scopeSet.includes(v))}
@@ -52,10 +59,18 @@ type Auth={client:Client;client_id:string;redirect_uri:string;code_challenge:str
 async function authorizeParams(request:Request,env:Env,query:URLSearchParams):Promise<Auth|null>{
  const client_id=query.get('client_id')||'',redirect_uri=query.get('redirect_uri')||'',code_challenge=query.get('code_challenge')||'';
  const state=query.get('state')||'',scope=query.get('scope')||'memory:read memory:propose',resource=query.get('resource')||'';
- if(query.get('response_type')!=='code'||query.get('code_challenge_method')!=='S256'|| !/^[A-Za-z0-9_-]{43}$/.test(code_challenge) ||
-   state.length>500 || !allowedScope(scope) || !approvedResource(request,resource))return null;
+ const validRequest=query.get('response_type')==='code'&&query.get('code_challenge_method')==='S256'&&/^[A-Za-z0-9_-]{43}$/.test(code_challenge)&&state.length<=500&&allowedScope(scope)&&approvedResource(request,resource);
+ const context={client:clientKind(client_id),callback:callbackPath(redirect_uri),resource_valid:approvedResource(request,resource)};
+ if(!validRequest){
+   oauthAudit('authorize_rejected',{...context,reason:'invalid_parameters_or_pkce'});
+   return null;
+ }
  const client=await clientFor(env,client_id);
- if(!client||!JSON.parse(client.redirect_uris).includes(redirect_uri))return null;
+ if(!client||!JSON.parse(client.redirect_uris).includes(redirect_uri)){
+   oauthAudit('authorize_rejected',{...context,reason:client?'redirect_mismatch':'unknown_client'});
+   return null;
+ }
+ oauthAudit('authorize_accepted',context);
  return {client,client_id,redirect_uri,code_challenge,state,scope,resource};
 }
 function appendAuthError(p:Auth,error:string,issuer:string){
@@ -98,12 +113,13 @@ export async function handleOAuth(request:Request,env:Env):Promise<Response|null
   let data:unknown;
   try{const raw=await request.text();if(raw.length>5000)return fail('invalid_client_metadata','Request too large',413);data=JSON.parse(raw)}
   catch{return fail('invalid_client_metadata','Invalid JSON')}
-  if(!validClientInput(data))return fail('invalid_client_metadata','Invalid public client registration');
+  if(!validClientInput(data)){oauthAudit('register_rejected',{reason:'invalid_client_metadata'});return fail('invalid_client_metadata','Invalid public client registration');}
   const count=await env.DB.prepare('SELECT COUNT(*) AS count FROM oauth_clients').first<{count:number}>();
   if(Number(count?.count??0)>=100)return fail('invalid_client_metadata','Client registration quota reached',429);
   const name=(data.client_name||'Unverified MCP client').trim()||'Unverified MCP client',id=crypto.randomUUID();
   await env.DB.prepare('INSERT INTO oauth_clients (id,name,redirect_uris,created_at) VALUES (?,?,?,?)')
    .bind(id,name,JSON.stringify(data.redirect_uris),new Date().toISOString()).run();
+  oauthAudit('register_succeeded',{client:'registered',callback:callbackPath(data.redirect_uris[0])});
   return json({client_id:id,client_name:name,redirect_uris:data.redirect_uris,token_endpoint_auth_method:'none',
    grant_types:['authorization_code'],response_types:['code']},201);
  }
@@ -120,6 +136,7 @@ export async function handleOAuth(request:Request,env:Env):Promise<Response|null
    const p=await authorizeParams(request,env,url.searchParams);
    if(!p)return fail('invalid_request','Invalid authorization parameters');
    const form=await request.formData();if(form.get('decision')!=='approve')return redirect(appendAuthError(p,'access_denied',base));
+   oauthAudit('consent_approved',{client:clientKind(p.client_id),callback:callbackPath(p.redirect_uri)});
    const code=random(),codeHash=await digest(code);
    await env.DB.prepare('INSERT INTO oauth_codes (code_hash,client_id,redirect_uri,code_challenge,resource,scopes,expires_at) VALUES (?,?,?,?,?,?,?)')
     .bind(codeHash,p.client_id,p.redirect_uri,p.code_challenge,p.resource,p.scope,now()+300).run();
@@ -139,6 +156,7 @@ export async function handleOAuth(request:Request,env:Env):Promise<Response|null
   if(!p)return fail('invalid_request','Invalid authorization parameters');
   const key=String(form.get('secret')||'');
   if(!authorized('Bearer '+key,env.MEMORY_API_TOKEN))return html('<h2>Sign-in failed</h2><p>Invalid owner access key.</p>');
+  oauthAudit('owner_login_succeeded',{client:clientKind(p.client_id)});
   return redirect(target.toString(),sessionHeaders(await issueSession(env.MEMORY_API_TOKEN)));
  }
  if(path==='/oauth/token'){
@@ -148,6 +166,7 @@ export async function handleOAuth(request:Request,env:Env):Promise<Response|null
   const form=new URLSearchParams(raw);
   if(form.get('grant_type')!=='authorization_code')return fail('unsupported_grant_type','Only authorization_code is supported');
   const client_id=form.get('client_id')||'',code=form.get('code')||'',verifier=form.get('code_verifier')||'',redirectUri=form.get('redirect_uri')||'',resource=form.get('resource')||'';
+  oauthAudit('token_attempt',{client:clientKind(client_id),callback:callbackPath(redirectUri),resource_valid:approvedResource(request,resource)});
   if(!/^[A-Za-z0-9_-]{43,128}$/.test(verifier)|| !code || !approvedResource(request,resource))return fail('invalid_grant','Invalid PKCE or resource');
   const client=await clientFor(env,client_id);
   if(!client||!JSON.parse(client.redirect_uris).includes(redirectUri))return fail('invalid_client','Unknown client or redirect');
@@ -161,6 +180,7 @@ export async function handleOAuth(request:Request,env:Env):Promise<Response|null
   const token=random();
   await env.DB.prepare('INSERT INTO oauth_tokens (token_hash,client_id,resource,scopes,expires_at,created_at) VALUES (?,?,?,?,?,?)')
    .bind(await digest(token),client_id,resource,pending.scopes,now()+3600,now()).run();
+  oauthAudit('token_issued',{client:clientKind(client_id),resource_grok:resource.endsWith('/grok/mcp')});
   return json({access_token:token,token_type:'Bearer',expires_in:3600,scope:pending.scopes},200,{'cache-control':'no-store','pragma':'no-cache'});
  }
  return null;
