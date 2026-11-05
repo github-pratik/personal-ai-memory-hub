@@ -1,5 +1,6 @@
 import { stableMemoryId, proposalMemoryId } from './import';
 import { handleMcp } from './mcp';
+import { handleOAuth, oauthScopes, oauthChallenge } from './oauth';
 import { rankEvidence, type Evidence } from './relevance';
 import { handleUi } from './ui';
 import { authorized, safeLimit, validateMemoryInput, validId } from './domain';
@@ -53,11 +54,27 @@ const worker = {
       if(result)return result;
     }
     if(path==='/health' && method==='GET')return json({status:'ok',service:'personal-ai-memory-hub',version:'0.2.0'});
+    // OAuth discovery/registration/auth endpoints do not use the MCP Bearer gate.
+    // Authorization and consent themselves still require the signed owner session.
+    if(path.startsWith('/oauth/')||path.startsWith('/.well-known/oauth-')){
+      if(!env.DB)return err('Database binding missing',503);
+      const oauth=await handleOAuth(request,env);
+      if(oauth)return oauth;
+    }
+    // A scoped, short-lived OAuth token authorizes MCP only, never REST owner routes.
+    if(path==='/mcp'){
+      if(!env.DB)return err('Database binding missing',503);
+      const staticRole=roleOf(request.headers.get('authorization'),env);
+      const scopes=staticRole?null:await oauthScopes(request,env);
+      if(!staticRole&&!scopes)return new Response(JSON.stringify({error:'Unauthorized'}),{
+        status:401,headers:{'content-type':'application/json','cache-control':'no-store','www-authenticate':oauthChallenge(request)}
+      });
+      return handleMcp(request,env,scopes||undefined);
+    }
     const role=roleOf(request.headers.get('authorization'),env);
     if(!role)return err('Unauthorized',401);
     if(!allowed(role,method,path))return err('Forbidden',403);
     if(!env.DB)return err('Database binding missing',503);
-    if(path==='/mcp')return handleMcp(request,env);
     try{
       if(path==='/v1/import' && method==='POST'){
         const raw=await request.text();
