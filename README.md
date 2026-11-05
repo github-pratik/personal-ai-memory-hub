@@ -42,7 +42,7 @@ The public endpoint does **not** mean private memory is publicly accessible: pri
 - Queue AI-suggested facts for explicit owner approval or rejection.
 - Bulk import and JSON backup/export.
 - Rank approved career evidence against job descriptions using free keyword matching (not a generative model).
-- Separate owner and agent Bearer credentials.
+- Separate owner and agent Bearer credentials, plus optional OAuth authorization-code/PKCE for hosted MCP clients (code complete; deployment pending).
 - Authenticated remote JSON-RPC MCP endpoint exposing **three read-only tools and two pending-proposal tools**:
   - `search_memory` — query source-linked, approved memories.
   - `get_memory` — fetch one approved memory by ID.
@@ -71,12 +71,12 @@ The public endpoint does **not** mean private memory is publicly accessible: pri
 | Data store | Cloudflare D1 (SQLite) with revision tracking |
 | Browser session | Signed 12-hour HttpOnly cookie |
 | Optional browser SSO | Cloudflare Access email OTP (not yet enabled) |
-| MCP and REST API | HTTPS + owner/agent Bearer tokens |
+| MCP and REST API | HTTPS + owner/agent Bearer tokens; new owner-consented OAuth + PKCE for MCP only (deployment pending) |
 | Memory integrity | Approved facts only; owner-reviewed new and correction proposals |
 | Evidence matching | Deterministic keyword overlap |
 | Agent access | Narrower than owner access; MCP can read approved records and submit pending proposals only |
 
-**Never paste or commit** API tokens, career records, private exports, or confidential employer data. Before connecting an external assistant, use a **separate `MEMORY_AGENT_TOKEN`**, not your dashboard's master key. Check which authentication schemes that assistant actually supports and do not bypass authentication for convenience.
+**OAuth support is committed but not yet deployed or verified from ChatGPT/Grok.** It adds DCR-based client registration, metadata discovery, signed-in owner consent, strict audience/scopes, and short-lived hashed access tokens. The Claude fixed-header integration remains supported. **Never paste or commit** API tokens, career records, private exports, or confidential employer data. Before connecting an external assistant, use a **separate `MEMORY_AGENT_TOKEN`**, not your dashboard's master key. Check which authentication schemes that assistant actually supports and do not bypass authentication for convenience.
 
 ## Local development
 
@@ -97,6 +97,7 @@ Create a local `.dev.vars` from `.env.example` with a **random, at least 32-char
 - [Remote MCP tools and authentication](docs/MCP.md)
 - [Cross-assistant memory updates, job applications and resume guidelines](docs/CROSS_ASSISTANT_UPDATES.md)
 - [Grok connector setup](docs/GROK.md)
+- [OAuth requirements and live verification checklist](docs/OAUTH_REQUIREMENTS.md)
 - [Deployment instructions](docs/DEPLOYMENT.md)
 - [Cloudflare Access email OTP](docs/CLOUDFLARE_ACCESS_OTP.md)
 - [Security and privacy](docs/SECURITY.md)
