@@ -72,17 +72,32 @@ const worker = {
       const staticRole=roleOf(request.headers.get('authorization'),env);
       const scopes=staticRole?null:await oauthScopes(request,env);
       if(!staticRole&&!scopes){
-        // Grok must receive the protected-resource challenge on the FIRST
-        // request. Anonymous discovery on /mcp causes Grok to show "Connected"
-        // without ever launching OAuth, then fail its subsequent tool call.
-        // Keep legacy /mcp discovery for existing ChatGPT/Claude clients.
-        if(path==='/grok/mcp')return new Response(JSON.stringify({error:'authentication_required'}),{
-          status:401,headers:{
-            'content-type':'application/json; charset=utf-8',
-            'cache-control':'no-store',
-            'www-authenticate':oauthChallenge(request)
+        // Grok needs an anonymous initialize handshake to recognize the
+        // server. Challenge the next tools/list call to initiate OAuth before
+        // exposing a usable tool inventory. No data or private tools execute.
+        if(path==='/grok/mcp'){
+          if(method==='POST'){
+            try{
+              const raw=await request.clone().text();
+              if(raw.length<=16000){
+                const p:unknown=JSON.parse(raw);
+                if(p&&typeof p==='object'&&!Array.isArray(p)){
+                  const rpc=p as Record<string,unknown>;
+                  if(rpc.jsonrpc==='2.0' && ['initialize','ping','notifications/initialized'].includes(String(rpc.method||''))){
+                    return handleMcp(request,env);
+                  }
+                }
+              }
+            }catch{}
           }
-        });
+          return new Response(JSON.stringify({error:'authentication_required'}),{
+            status:401,headers:{
+              'content-type':'application/json; charset=utf-8',
+              'cache-control':'no-store',
+              'www-authenticate':oauthChallenge(request)
+            }
+          });
+        }
         // Public MCP discovery exposes schemas only, never memory content. ChatGPT
         // needs to inspect these OAuth-protected tools before the login flow.
         // No authenticated tools/call may execute through this path.
