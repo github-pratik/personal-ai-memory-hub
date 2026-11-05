@@ -24,6 +24,18 @@ Grok's official [custom MCP connector guide](https://docs.x.ai/grok/connectors) 
 
 There is **one** Cloudflare Worker and **one** private D1 memory database for ChatGPT, Claude and Grok. No Grok-specific copy is needed. Owner-only approval/rejection is not exposed to Grok.
 
+## One-click Grok OAuth Client ID registration
+
+Grok's web connector has previously displayed the **OAuth Credentials Required** form. We added a manual [Register Grok OAuth client](https://github.com/github-pratik/personal-ai-memory-hub/actions/workflows/register-grok.yml) GitHub Actions workflow:
+
+1. Open the workflow, click **Run workflow** on `main`.
+2. Open the completed run, expand **Register public PKCE client for Grok web connector** and copy the `GROK_CLIENT_ID` value.
+3. In Grok's custom connector, use the MCP URL above and enter the **GROK_CLIENT_ID**. Leave Client Secret empty. Use the authorization and token endpoints listed below; scopes `memory:read memory:propose` if requested; token auth method `none (PKCE only)`.
+4. Approve the sign-in from the Memory Hub browser page. Do **not** enter the Memory Hub master access key into Grok itself.
+5. Test Grok with a read-only request for the existing synthetic memory.
+
+The workflow registers **only** `https://grok.com/connectors-oauth-exchange-code/`, a callback corroborated by multiple community integration guides. Grok's official connector documentation does not explicitly publish the callback. If Grok sends a different `redirect_uri`, registration must be adjusted to the exact observed URI, not guessed or loosened to a wildcard. The Client ID is a public identifier, **not** a secret; no private token is exposed in logs.
+
 ## Deployed OAuth endpoints (if manual setup is necessary)
 
 | Field | Deployed value |
@@ -36,7 +48,7 @@ There is **one** Cloudflare Worker and **one** private D1 memory database for Ch
 | Dynamic Client Registration | `https://personal-ai-memory-hub.p-pshpatil.workers.dev/oauth/register` |
 | Scopes | `memory:read memory:propose` |
 | Auth method | public client `none`, **PKCE S256** |
-| Client ID | **Not yet registered for Grok**. Registration must bind Grok's exact callback URI. |
+| Client ID | Run the [manual Grok registration workflow](https://github.com/github-pratik/personal-ai-memory-hub/actions/workflows/register-grok.yml) and copy its `GROK_CLIENT_ID` output; client registration is required before filling this field. |
 | Client secret | None for a PKCE public client. Do not use the Memory Hub/Cloudflare secrets. |
 
 **Limitations:** OAuth tokens expire after one hour and there is no refresh-token flow or revocation dashboard yet. A real hosted Grok session has not been tested. We must resolve any incompatibility without weakening the private memory boundary.
