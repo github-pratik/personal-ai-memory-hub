@@ -2,38 +2,81 @@
 
 ![CI](https://github.com/github-pratik/personal-ai-memory-hub/actions/workflows/ci.yml/badge.svg)
 
-**Open-source personal knowledge infrastructure for job applications and compatible AI assistants.**
+**One private, user-controlled memory source for multiple AI assistants.**
 
-**Public code. Private facts. No required paid LLM API.**
+**Public code. Private memories. No required paid LLM API.** Hosting targets Cloudflare's free allowances.
 
-## Why this exists
+## The goal: connect AI assistants to the same trusted memory
 
-People repeatedly explain the same work experience, projects, skills and career preferences to different AI assistants. This project maintains an **approved source of truth** accessible from authorized devices, so a resume is grounded in real evidence rather than invented achievements.
+You should not have to re-explain your projects, skills, experience and preferences independently to ChatGPT, Claude, Grok and Gemini. The Memory Hub stores owner-approved facts once and makes them available through a protected, standard **Model Context Protocol (MCP)** endpoint to compatible clients.
 
-## Working features (locally tested)
+```text
+ChatGPT / Claude / Grok / Gemini / compatible MCP clients
+                    |
+           secure MCP integration
+                    |
+   Personal AI Memory Hub (Cloudflare Worker)
+        |                  |
+   3 read-only tools    private dashboard
+        |                  |
+             Cloudflare D1
+      approved facts + provenance
+```
 
-- Private browser dashboard with signed, HttpOnly sessions.
-- Add, search and archive approved experience, projects and skills.
-- Review and approve or reject AI-proposed facts.
-- Bulk-import verified facts from JSON and restore approved facts from JSON backup exports.
-- Export memories, revisions and proposals as private JSON.
-- Paste a job description and retrieve matching source-linked career evidence without paid inference.
-- Role-separated owner and agent API credentials.
-- Authenticated, **read-only MCP prototype**: `search_memory`, `get_memory`, `match_job`.
-- GitHub Actions tests with local Cloudflare D1 migrations and real Worker API smoke tests.
+**Core mission:** interoperate with AI assistants. The dashboard and resume features are interfaces to that shared memory, not the final product on their own. **Current rollout priority: connecting and verifying real AI clients before importing personal career facts.**
 
-## Architecture
+## Live deployment
+
+- **Worker:** https://personal-ai-memory-hub.p-pshpatil.workers.dev
+- **MCP endpoint:** `https://personal-ai-memory-hub.p-pshpatil.workers.dev/mcp`
+- **Status:** Worker deployed; private browser login and dashboard verified by the owner, GitHub CI green on the login fix. Remote MCP client login/tool execution is **not yet verified**.
+- **Memory database:** empty by choice during integration setup; no production career facts should be published to this repository.
+- **Email OTP:** Cloudflare Access integration code exists, but Access policy and passwordless browser sign-in are **not enabled**. The current login uses a private access key.
+
+The public endpoint does **not** mean private memory is publicly accessible: private API and MCP requests require configured credentials.
+
+## Current capabilities
+
+- Single-user private dashboard with signed, HttpOnly sessions and same-origin form protection.
+- Create, search, update, archive and revision approved memories in Cloudflare D1.
+- Queue AI-suggested facts for explicit owner approval or rejection.
+- Bulk import and JSON backup/export.
+- Rank approved career evidence against job descriptions using free keyword matching (not a generative model).
+- Separate owner and agent Bearer credentials.
+- Read-only remote JSON-RPC MCP endpoint exposing:
+  - `search_memory` — query source-linked, approved memories.
+  - `get_memory` — fetch one approved memory by ID.
+  - `match_job` — rank evidence against a job description.
+- GitHub Actions CI with unit tests, Worker smoke tests and D1 migration tests; manual Cloudflare deployment.
+
+## Assistant integration roadmap
+
+| Assistant | Path | Verified in real client? |
+|---|---|---|
+| **Grok** | Grok **Custom MCP Connector** or Grok Build remote HTTP MCP | **Not yet** |
+| **Claude** | Supported custom remote MCP connector, depending on client/plan | **Not yet** |
+| **ChatGPT** | Custom MCP/plugin connection subject to current authentication and account support | **Not yet** |
+| **Gemini** | Compatible MCP client or adapter, subject to its available runtime | **Not yet** |
+| Other MCP clients | Streamable HTTP compatibility and credential configuration | **Not yet** |
+
+**Integration instructions:** [Grok](docs/GROK.md) · [MCP protocol and tests](docs/MCP.md). Passing CI proves the Worker behavior, **not** successful connection to any provider.
+
+## Security architecture
 
 | Layer | Implementation |
 |---|---|
-| Server and UI | Cloudflare Worker, TypeScript, server-rendered HTML |
-| Database | Cloudflare D1 (SQLite) |
-| Career evidence matching | Deterministic keyword overlap |
-| Sessions | Signed 12-hour HttpOnly cookie |
-| AI interoperability | JSON-RPC MCP over HTTPS, Bearer authentication |
-| Optional future services | OAuth, free-model routing, Redis only if justified |
+| Hosting | Cloudflare Worker, TypeScript |
+| Data store | Cloudflare D1 (SQLite) with revision tracking |
+| Browser session | Signed 12-hour HttpOnly cookie |
+| Optional browser SSO | Cloudflare Access email OTP (not yet enabled) |
+| MCP and REST API | HTTPS + owner/agent Bearer tokens |
+| Memory integrity | Approved facts only; pending AI suggestions |
+| Evidence matching | Deterministic keyword overlap |
+| Agent access | Narrower than owner access; MCP tools are read-only |
 
-## Try locally
+**Never paste or commit** API tokens, career records, private exports, or confidential employer data. Before connecting an external assistant, use a **separate `MEMORY_AGENT_TOKEN`**, not your dashboard's master key. Check which authentication schemes that assistant actually supports and do not bypass authentication for convenience.
+
+## Local development
 
 Requires Node.js 22+.
 
@@ -43,41 +86,25 @@ npm run check
 npx wrangler d1 migrations apply memory-hub --local
 ```
 
-Create a local `.dev.vars` containing `MEMORY_API_TOKEN=<your-strong-random-token>`, never commit it. Replace the placeholder with a secret of 40+ random characters. Then:
+Create a local `.dev.vars` from `.env.example` with a **random, at least 32-character** `MEMORY_API_TOKEN` (40+ recommended). Never commit it. Run `npm run dev`.
 
-```bash
-npm run dev
-```
+## Documentation
 
-Open the local Worker URL, sign in, and add a synthetic test memory. Private information should only be used after reviewing the security model and creating backups.
-
-## Hosting
-
-The deployment workflow is prepared, but **the service has not been deployed**. A user-controlled Cloudflare account and D1 database must be authorized first. See [deployment setup](docs/DEPLOYMENT.md).
-
-Our $0/month goal assumes workloads remain within provider free-tier allowances; free capacity and terms may change.
-
-## Docs and development
-
-- [Current status](docs/STATUS.md)
-- [Product scope](docs/MVP.md)
-- [Job application workflow](docs/JOB_APPLICATION_WORKFLOW.md)
-- [Deployment and one-time account setup](docs/DEPLOYMENT.md)
-- [Remote MCP protocol](docs/MCP.md)
-- [Security model](docs/SECURITY.md)
-- [Cloudflare Access email OTP setup](docs/CLOUDFLARE_ACCESS_OTP.md)
-- [Agent development instructions](AGENTS.md)
-- [Cloudflare agent skills and management MCP](docs/CLOUDFLARE_AGENT_TOOLS.md)
+- [Project purpose and MVP](docs/MVP.md)
+- [Current status and outstanding integration gates](docs/STATUS.md)
+- [Remote MCP tools and authentication](docs/MCP.md)
+- [Grok connector setup](docs/GROK.md)
+- [Deployment instructions](docs/DEPLOYMENT.md)
+- [Cloudflare Access email OTP](docs/CLOUDFLARE_ACCESS_OTP.md)
+- [Security and privacy](docs/SECURITY.md)
+- [Local development](docs/SETUP.md)
+- [Career evidence workflow](docs/JOB_APPLICATION_WORKFLOW.md)
+- [Cloudflare developer tooling (separate management MCP)](docs/CLOUDFLARE_AGENT_TOOLS.md)
+- [Agent development guidelines](AGENTS.md)
 - [Issues and roadmap](https://github.com/github-pratik/personal-ai-memory-hub/issues)
 
-## Security and limitations
+## Cost, limits and license
 
-- **Never commit** personal memories, resumes, access tokens, work-confidential data or production exports.
-- AI suggestions are pending until the owner approves them.
-- Bearer-authenticated MCP is implemented, but **ChatGPT, Claude and Grok connectivity is not yet universally verified** and may require OAuth support.
-- The default login is a private access key. Optional Cloudflare Access email OTP is implemented behind a secure, opt-in rollout; it is not active until an account owner configures the Cloudflare Access policy and deployment settings. This is not an audited multi-user product.
-- A production security and quota review is still required.
+Designed around free Cloudflare Workers and D1 usage, with **no required paid LLM API**. Free plans have usage limits and are not a guarantee of permanent $0 cost. This is an evolving single-user project, not a completed multi-provider authentication system or independently audited security product.
 
-## License
-
-[MIT](LICENSE)
+[MIT License](LICENSE)
