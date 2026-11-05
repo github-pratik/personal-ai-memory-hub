@@ -154,7 +154,7 @@ export async function handleOAuth(request:Request,env:Env):Promise<Response|null
   const token=random();
   await env.DB.prepare('INSERT INTO oauth_tokens (token_hash,client_id,resource,scopes,expires_at,created_at) VALUES (?,?,?,?,?,?)')
    .bind(await digest(token),client_id,resource,pending.scopes,now()+3600,now()).run();
-  return json({access_token:token,token_type:'Bearer',expires_in:3600,scope:pending.scopes},{valueOf(){return 200}} as unknown as number,{'cache-control':'no-store','pragma':'no-cache'});
+  return json({access_token:token,token_type:'Bearer',expires_in:3600,scope:pending.scopes},200,{'cache-control':'no-store','pragma':'no-cache'});
  }
  return null;
 }
