@@ -16,7 +16,7 @@ The Worker is deployed. **Claude has been verified by the owner** to discover th
 
 - HTTPS JSON-RPC endpoint, advertising MCP protocol version `2025-06-18`.
 - Implemented methods: `initialize`, `ping`, `tools/list`, `tools/call`, `notifications/initialized`.
-- Authentication: `Authorization: Bearer <MEMORY_AGENT_TOKEN>`, or owner credential. **Use the dedicated agent token for external assistants, never the owner key.**
+- Authentication: existing `Authorization: Bearer <MEMORY_AGENT_TOKEN>` or owner credential. A new DCR/OAuth authorization-code + PKCE flow has been added in source but requires a new production deployment before connecting ChatGPT/Grok. **Use the dedicated agent token for external assistants, never the owner key.**
 - Read-only tools:
   1. `search_memory`: search approved memories by text/category; include evidence source.
   2. `get_memory`: retrieve an approved record by UUID.
@@ -52,7 +52,7 @@ Never share tokens or sensitive response payloads in public issues, commit histo
 
 ## Known interoperability gaps
 
-- OAuth authorization server, discovery metadata, consent, access/refresh tokens and user-scoped clients are not implemented.
+- OAuth discovery, public DCR, owner consent, PKCE, short-lived access tokens and scope/resource checks have been implemented but **not yet live-deployed or hosted-client-verified**. Refresh tokens, revocation UI, CIMD and multi-user isolation are not implemented.
 - Full MCP Streamable HTTP behavior and compatibility with each hosted AI client are not independently proven.
 - Cloudflare Access Email OTP is a **browser-login** option, not a general OAuth replacement for MCP clients.
 - The official Cloudflare **management MCP** in `.mcp.json` is different from our Memory Hub **memory MCP**.
@@ -73,3 +73,14 @@ Do not give an AI client your dashboard owner token. The agent may **submit prop
 ## Job applications and resume guideline updates
 
 Use `search_memory` before proposing a change. Use `propose_memory` for new records and `propose_memory_update` for corrections to the existing record. For now, job applications use category `other` and titles beginning `Job application:`; resume rules use category `preference`. See [cross-assistant updates](CROSS_ASSISTANT_UPDATES.md). These are provisional conventions, not a fully structured application tracking table.
+
+## OAuth metadata (after deployment)
+
+- `GET /.well-known/oauth-protected-resource`: protected MCP resource and issuer.
+- `GET /.well-known/oauth-authorization-server`: OAuth endpoints and supported S256 PKCE/none client auth.
+- `POST /oauth/register`: public-client dynamic registration (DCR).
+- `GET/POST /oauth/authorize`: owner sign-in plus explicit consent and short-lived authorization code.
+- `POST /oauth/token`: single-use authorization-code + PKCE exchange.
+- Scopes: `memory:read` and `memory:propose`. They **never** grant owner-level actions. Access tokens expire after one hour; no refresh token issuance yet.
+
+See [OAuth requirements](OAUTH_REQUIREMENTS.md) and [Security](SECURITY.md). Never use the owner key as an OAuth Client ID.
