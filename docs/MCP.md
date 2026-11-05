@@ -24,7 +24,9 @@ The Worker is deployed. **Claude has been verified by the owner** to discover th
 - **Pending proposal only**:
   4. `propose_memory`: submit a proposed fact containing `title`, `body`, `category`, and `source`, only upon a user's explicit request. The server validates input, labels its source as an AI suggestion, checks the pending queue limit (100), and responds with `status: "pending"` and `requires_owner_approval: true`. It does **not** add an approved memory.
 
-An agent's token has narrower permissions than the owner. MCP cannot approve, edit, archive or delete approved memories. The owner reviews proposals in the private dashboard, where they can approve or reject them. Pending proposals are not returned by `search_memory` or `get_memory` until approved.
+  5. `propose_memory_update`: suggest a complete replacement for an existing approved record identified by `memory_id`. The original `updated_at` version is captured. The owner can approve or reject the correction in the dashboard. Stale corrections fail with a conflict instead of replacing newly edited facts.
+
+An agent's token has narrower permissions than the owner. MCP cannot directly approve, edit, archive or delete approved memories. The owner reviews proposals in the private dashboard, where they can approve or reject them. Pending proposals are not returned by `search_memory` or `get_memory` until approved.
 
 ## Client compatibility checklist
 
@@ -67,3 +69,7 @@ See [Security](SECURITY.md), [Grok setup](GROK.md), [STATUS](STATUS.md).
 6. Reject the synthetic proposal using the private dashboard. Confirm the approved memory store remains unchanged.
 
 Do not give an AI client your dashboard owner token. The agent may **submit proposals**, but it may not approve them. Model-generated text is an untrusted suggestion until the owner confirms it.
+
+## Job applications and resume guideline updates
+
+Use `search_memory` before proposing a change. Use `propose_memory` for new records and `propose_memory_update` for corrections to the existing record. For now, job applications use category `other` and titles beginning `Job application:`; resume rules use category `preference`. See [cross-assistant updates](CROSS_ASSISTANT_UPDATES.md). These are provisional conventions, not a fully structured application tracking table.
