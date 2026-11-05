@@ -159,7 +159,12 @@ const worker = {
           id:string;memory_id:string;target_updated_at:string;title:string;body:string;category:string;source:string;status:string
         }>();
         if(!p)return err('Not found',404);
+        // Repeated approval can arrive after the first request was committed.
+        if(p.status==='approved' && action==='approve')return json({id:proposalId,status:'approved',memory_id:p.memory_id,already_applied:true});
         if(p.status!=='pending')return err('Already decided',409);
+        const current=await env.DB.prepare("SELECT updated_at,state FROM memories WHERE id=?").bind(p.memory_id).first<{updated_at:string;state:string}>();
+        if(!current||current.state!=='approved')return err('Target memory is no longer approved',409);
+        if(current.updated_at!==p.target_updated_at)return err('Target memory was changed after this correction was proposed. Please submit a new correction.',409);
         const timestamp=now();
         if(action==='reject'){
           const result=await env.DB.prepare("UPDATE memory_update_proposals SET status='rejected',decided_at=? WHERE id=? AND status='pending'")
@@ -180,7 +185,14 @@ const worker = {
             WHERE id=? AND updated_at=? AND EXISTS (SELECT 1 FROM memory_update_proposals WHERE id=? AND status='approved')`)
              .bind(crypto.randomUUID(),timestamp,p.memory_id,timestamp,proposalId)
         ]);
-        if(batch[0].meta.changes!==1||batch[1].meta.changes!==1)return err('Target memory changed since this proposal. Submit a new correction.',409);
+        // D1's metadata can differ across execution contexts; verify actual
+        // committed status rather than falsely telling the owner an update failed.
+        if(batch[0].meta.changes!==1||batch[1].meta.changes!==1){
+          const outcome=await env.DB.prepare("SELECT status FROM memory_update_proposals WHERE id=?").bind(proposalId).first<{status:string}>();
+          if(outcome?.status==='approved')return json({id:proposalId,status:'approved',memory_id:p.memory_id,already_applied:true});
+          console.warn('Correction approval unexpected row counts',{memory_updated:batch[0].meta.changes,proposal_updated:batch[1].meta.changes});
+          return err('Correction not approved. The memory or proposal changed while applying it. Please refresh and retry.',409);
+        }
         return json({id:proposalId,status:'approved',memory_id:p.memory_id});
       }
       const decision=path.match(/^\/v1\/proposals\/([^/]+)\/(approve|reject)$/);
