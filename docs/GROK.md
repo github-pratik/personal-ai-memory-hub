@@ -43,3 +43,7 @@ All searches read the same Cloudflare D1 database used by the browser dashboard 
 - **Deploy has the old behavior:** run a **new** workflow on current `main`; `Re-run all jobs` on a previous run redeploys its original commit.
 
 See [MCP.md](MCP.md), [STATUS.md](STATUS.md), and [SECURITY.md](SECURITY.md).
+
+## OAuth implementation update (requires deployment and live test)
+
+The Memory Hub source now includes OAuth authorization server metadata, dynamic client registration, owner-consented authorization code + PKCE, and a token endpoint. After deploying current `main`, retry the same MCP URL. Grok's connector may request a client ID and explicit endpoint configuration; the exact client onboarding behavior must be verified in Grok. No successful Grok OAuth connection has been established yet. Consult [OAuth requirements](OAUTH_REQUIREMENTS.md); never substitute owner/Cloudflare tokens for OAuth client credentials.
