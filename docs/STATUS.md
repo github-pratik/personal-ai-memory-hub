@@ -34,3 +34,7 @@ See [MCP integration](MCP.md), [Security](SECURITY.md) and [Grok](GROK.md).
 ## Cross-assistant update workflows
 
 Supported by code and local tests: proposed new memories, corrections to approved records, owner-side before/after review, rejection and version-checked approval. Job application history and resume guidelines can use categories `other` and `preference` respectively; dedicated structured application status and revision rules remain future work. See [CROSS_ASSISTANT_UPDATES.md](CROSS_ASSISTANT_UPDATES.md).
+
+## Archived-target correction recovery (code change pending deployment)
+
+Correction proposals may reference a memory that was archived after the suggestion was created. The dashboard previously displayed the original via a join without its state and offered an approval action that rejected archived targets. The dashboard now shows the target state and offers a **separate, explicit owner-only Restore archived memory and approve correction** action. Ordinary correction approval still refuses archived and stale records; the recovery operation is transactional and records a revision. Regression test covers archive, normal conflict, restricted-agent refusal, owner recovery, and repeat requests. The exact current state of the owner's production test record has not been independently read.
