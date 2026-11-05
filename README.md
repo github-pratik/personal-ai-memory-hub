@@ -17,7 +17,7 @@ ChatGPT / Claude / Grok / Gemini / compatible MCP clients
                     |
    Personal AI Memory Hub (Cloudflare Worker)
         |                  |
-   3 read-only tools    private dashboard
+   3 read + 1 propose    private dashboard
         |                  |
              Cloudflare D1
       approved facts + provenance
@@ -29,7 +29,7 @@ ChatGPT / Claude / Grok / Gemini / compatible MCP clients
 
 - **Worker:** https://personal-ai-memory-hub.p-pshpatil.workers.dev
 - **MCP endpoint:** `https://personal-ai-memory-hub.p-pshpatil.workers.dev/mcp`
-- **Status:** Worker deployed; private browser login and dashboard verified by the owner, GitHub CI green on the login fix. **Claude has successfully discovered all three MCP tools and called `search_memory`**, returning `{"items":[]}` with no error (owner-reported live test). Other clients are pending.
+- **Status:** Worker deployed; private browser login and dashboard verified by the owner, GitHub CI green on the login fix. **Claude previously discovered the original three MCP tools and called `search_memory`**, returning `{"items":[]}` with no error (owner-reported live test). The new `propose_memory` tool must still be verified by Claude after redeployment; other clients are pending.
 - **Memory database:** empty by choice during integration setup; no production career facts should be published to this repository.
 - **Email OTP:** Cloudflare Access integration code exists, but Access policy and passwordless browser sign-in are **not enabled**. The current login uses a private access key.
 
@@ -43,10 +43,11 @@ The public endpoint does **not** mean private memory is publicly accessible: pri
 - Bulk import and JSON backup/export.
 - Rank approved career evidence against job descriptions using free keyword matching (not a generative model).
 - Separate owner and agent Bearer credentials.
-- Read-only remote JSON-RPC MCP endpoint exposing:
+- Authenticated remote JSON-RPC MCP endpoint exposing **three read-only tools and one pending-proposal tool**:
   - `search_memory` — query source-linked, approved memories.
   - `get_memory` — fetch one approved memory by ID.
   - `match_job` — rank evidence against a job description.
+  - `propose_memory` — submit a user-requested suggestion to the **pending owner-review queue**, never directly to approved memories.
 - GitHub Actions CI with unit tests, Worker smoke tests and D1 migration tests; manual Cloudflare deployment.
 
 ## Assistant integration roadmap
@@ -72,7 +73,7 @@ The public endpoint does **not** mean private memory is publicly accessible: pri
 | MCP and REST API | HTTPS + owner/agent Bearer tokens |
 | Memory integrity | Approved facts only; pending AI suggestions |
 | Evidence matching | Deterministic keyword overlap |
-| Agent access | Narrower than owner access; MCP tools are read-only |
+| Agent access | Narrower than owner access; MCP can read approved records and submit pending proposals only |
 
 **Never paste or commit** API tokens, career records, private exports, or confidential employer data. Before connecting an external assistant, use a **separate `MEMORY_AGENT_TOKEN`**, not your dashboard's master key. Check which authentication schemes that assistant actually supports and do not bypass authentication for convenience.
 
