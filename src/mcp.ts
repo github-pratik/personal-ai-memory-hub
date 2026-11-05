@@ -6,7 +6,10 @@ type JsonRpcId=string|number|null;
 const reply=(payload:unknown,status=200)=>new Response(JSON.stringify(payload),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});
 const error=(id:JsonRpcId,code:number,message:string)=>({jsonrpc:'2.0',id,error:{code,message}});
 const success=(id:JsonRpcId,result:unknown)=>({jsonrpc:'2.0',id,result});
-const tool=(name:string,description:string,properties:Record<string,unknown>,required:string[]=[])=>({name,description,inputSchema:{type:'object',properties,required,additionalProperties:false}});
+const tool=(name:string,description:string,properties:Record<string,unknown>,required:string[]=[])=>({
+ name,description,inputSchema:{type:'object',properties,required,additionalProperties:false},
+ securitySchemes:[{type:'oauth2',scopes:name.startsWith('propose_')?['memory:propose']:['memory:read']}]
+});
 const stringProp=(description:string)=>({type:'string',description});
 export const MCP_TOOLS=[
  tool('search_memory','Search approved professional facts by keyword. Returns sources and factual context.',{
@@ -32,7 +35,7 @@ export const MCP_TOOLS=[
   source:stringProp('Evidence for correction or explicit user statement (1–500 characters)')
  },['memory_id','title','body','category','source'])
 ];
-export async function handleMcp(request:Request,env:Env):Promise<Response>{
+export async function handleMcp(request:Request,env:Env,scopes?:string[]):Promise<Response>{
  if(request.method!=='POST')return new Response(null,{status:405,headers:{allow:'POST','cache-control':'no-store'}});
  let body:unknown;
  try{
@@ -47,11 +50,14 @@ export async function handleMcp(request:Request,env:Env):Promise<Response>{
  if(msg.method==='notifications/initialized')return new Response(null,{status:202});
  if(msg.method==='ping')return reply(success(id,{}));
  if(msg.method==='initialize')return reply(success(id,{protocolVersion:'2025-06-18',capabilities:{tools:{listChanged:false}},serverInfo:{name:'personal-ai-memory-hub',version:'0.3.0'},instructions:'Retrieval returns only approved, source-linked memories. propose_memory and propose_memory_update may submit user-requested suggestions for explicit owner approval, never automatically approve or invent experience.'}));
- if(msg.method==='tools/list')return reply(success(id,{tools:MCP_TOOLS}));
+ if(msg.method==='tools/list')return reply(success(id,{tools:scopes?MCP_TOOLS.filter(t=>scopes.includes(t.name.startsWith('propose_')?'memory:propose':'memory:read')):MCP_TOOLS}));
  if(msg.method!=='tools/call')return reply(error(id,-32601,'Method not found'),404);
  const params=msg.params;
  if(!params||typeof params!=='object'||Array.isArray(params))return reply(error(id,-32602,'Invalid parameters'),400);
  const {name,arguments:args} = params as Record<string,unknown>;
+ if(scopes&&typeof name==='string'&&!scopes.includes(name.startsWith('propose_')?'memory:propose':'memory:read')){
+   return reply(error(id,-32003,'Insufficient OAuth scope'),403);
+ }
  const a=args&&typeof args==='object'&&!Array.isArray(args)?args as Record<string,unknown>:{};
  try{
   let result:unknown;
