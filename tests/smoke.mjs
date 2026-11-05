@@ -232,15 +232,14 @@ assert.equal(publicToolSchemas.length,5);
 assert.ok(publicToolSchemas.every(t=>t.securitySchemes?.some(s=>s.type==='oauth2')));
 const noAuthRead=await fetch(base+'/mcp',{method:'POST',headers:{'content-type':'application/json'},
  body:JSON.stringify({jsonrpc:'2.0',id:102,method:'tools/call',params:{name:'search_memory',arguments:{query:'Python'}}})});
-assert.equal(noAuthRead.status,200);
-const deniedRead=(await noAuthRead.json()).result;
-assert.equal(deniedRead.isError,true);
-assert.ok(deniedRead._meta['mcp/www_authenticate'][0].includes('resource_metadata='));
+assert.equal(noAuthRead.status,401);
+assert.match(noAuthRead.headers.get('www-authenticate')||'',/resource_metadata="https?:\/\//);
+assert.match(noAuthRead.headers.get('www-authenticate')||'',/error="invalid_token"/);
 const noAuthWrite=await fetch(base+'/mcp',{method:'POST',headers:{'content-type':'application/json'},
  body:JSON.stringify({jsonrpc:'2.0',id:103,method:'tools/call',params:{name:'propose_memory',arguments:{
  title:'Never stored',body:'No user session',category:'other',source:'Anonymous test'}}})});
-assert.equal(noAuthWrite.status,200);
-assert.equal((await noAuthWrite.json()).result.isError,true);
+assert.equal(noAuthWrite.status,401);
+assert.match(noAuthWrite.headers.get('www-authenticate')||'',/oauth-protected-resource/);
 const noUnauthorizedProposal=await request('/v1/proposals?status=pending');
 assert.equal(noUnauthorizedProposal.data.items.some(item=>item.title==='Never stored'),false);
 
