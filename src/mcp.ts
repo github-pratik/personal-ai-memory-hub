@@ -1,4 +1,4 @@
-import { safeLimit, validId } from './domain';
+import { safeLimit, validId, validateMemoryInput } from './domain';
 import { rankEvidence, type Evidence } from './relevance';
 
 interface Env {DB:D1Database}
@@ -17,7 +17,13 @@ export const MCP_TOOLS=[
  tool('get_memory','Read a single approved memory record, including its evidence source.',{id:stringProp('Memory UUID')},['id']),
  tool('match_job','Rank approved professional evidence against a job description. The ranking is heuristic, not a validation of the claim.',{
   job_description:stringProp('Target job description (15 to 12000 characters)')
- },['job_description'])
+ },['job_description']),
+ tool('propose_memory','Suggest a new memory ONLY when the user explicitly requests it. Saves to a pending owner-review queue, NOT approved memory. Do not invent facts or claim the proposal is approved.',{
+  title:stringProp('Concise proposed fact title, 1–160 characters'),
+  body:stringProp('Specific proposed fact details, 1–12000 characters; distinguish user statements from inference'),
+  category:{type:'string',enum:['experience','project','skill','education','preference','other']},
+  source:stringProp('Where the proposed fact came from, e.g., user statement in this conversation (1–500 characters)')
+ },['title','body','category','source'])
 ];
 export async function handleMcp(request:Request,env:Env):Promise<Response>{
  if(request.method!=='POST')return new Response(null,{status:405,headers:{allow:'POST','cache-control':'no-store'}});
@@ -33,7 +39,7 @@ export async function handleMcp(request:Request,env:Env):Promise<Response>{
  if(typeof msg.method!=='string'||msg.jsonrpc!=='2.0')return reply(error(id,-32600,'Invalid request'),400);
  if(msg.method==='notifications/initialized')return new Response(null,{status:202});
  if(msg.method==='ping')return reply(success(id,{}));
- if(msg.method==='initialize')return reply(success(id,{protocolVersion:'2025-06-18',capabilities:{tools:{listChanged:false}},serverInfo:{name:'personal-ai-memory-hub',version:'0.3.0'},instructions:'Only approved, source-linked memories are returned. Do not invent experience.'}));
+ if(msg.method==='initialize')return reply(success(id,{protocolVersion:'2025-06-18',capabilities:{tools:{listChanged:false}},serverInfo:{name:'personal-ai-memory-hub',version:'0.3.0'},instructions:'Retrieval returns only approved, source-linked memories. propose_memory may submit user-requested unverified suggestions for explicit owner approval, never automatically approve or invent experience.'}));
  if(msg.method==='tools/list')return reply(success(id,{tools:MCP_TOOLS}));
  if(msg.method!=='tools/call')return reply(error(id,-32601,'Method not found'),404);
  const params=msg.params;
@@ -63,6 +69,18 @@ export async function handleMcp(request:Request,env:Env):Promise<Response>{
    if(typeof desc!=='string'||desc.length<15||desc.length>12000)return reply(error(id,-32602,'Invalid job description'),400);
    const rows=await env.DB.prepare("SELECT id,title,body,category,source,updated_at FROM memories WHERE state='approved' ORDER BY updated_at DESC LIMIT 500").all<Evidence>();
    result={matches:rankEvidence(rows.results,desc),searched:rows.results.length};
+  }else if(name==='propose_memory'){
+   // Never write to approved memories from an MCP call. The owner must explicitly review.
+   const validation=validateMemoryInput(a);
+   if(!validation.ok)return reply(error(id,-32602,validation.error),400);
+   // Bound pending-queue growth to reduce abuse from compromised/misconfigured clients.
+   const pending=await env.DB.prepare("SELECT COUNT(*) AS count FROM memory_proposals WHERE status='pending'").first<{count:number}>();
+   if(Number(pending?.count??0)>=100)return reply(error(id,-32000,'Pending review queue is full (100). Ask the owner to review proposals.'),429);
+   const input=validation.value,idValue=crypto.randomUUID(),createdAt=new Date().toISOString();
+   const source=('AI suggestion via MCP: '+input.source).slice(0,500);
+   await env.DB.prepare('INSERT INTO memory_proposals (id,title,body,category,source,created_at) VALUES (?,?,?,?,?,?)')
+    .bind(idValue,input.title,input.body,input.category,source,createdAt).run();
+   result={id:idValue,status:'pending',requires_owner_approval:true,message:'Proposal submitted for owner review. It is NOT an approved memory.'};
   }else return reply(error(id,-32602,'Unknown tool'),400);
   return reply(success(id,{content:[{type:'text',text:JSON.stringify(result)}]}));
  }catch{
