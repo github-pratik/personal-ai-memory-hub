@@ -96,6 +96,28 @@ const ownerApproves=await request('/v1/proposals/'+suggestion.id+'/approve','POS
 assert.equal(ownerApproves.res.status,200);
 const afterApprove=await request('/v1/memories?q=MCP synthetic pending project');
 assert.equal(afterApprove.data.items.length,1);
+const updateProposal=await mcp('tools/call',{name:'propose_memory_update',arguments:{
+ memory_id:afterApprove.data.items[0].id,
+ title:'MCP synthetic corrected project',
+ body:'Corrected project details from the explicit synthetic test request',
+ category:'project',
+ source:'Synthetic correction requested by owner'
+}});
+assert.equal(updateProposal.status,200);
+const proposedCorrection=JSON.parse((await updateProposal.json()).result.content[0].text);
+assert.equal(proposedCorrection.status,'pending');
+assert.equal(proposedCorrection.requires_owner_approval,true);
+const unchangedBeforeCorrection=await request('/v1/memories/'+afterApprove.data.items[0].id);
+assert.equal(unchangedBeforeCorrection.data.title,'MCP synthetic pending project');
+const forbiddenUpdateApproval=await request('/v1/memory-updates/'+proposedCorrection.id+'/approve','POST',undefined,agent);
+assert.equal(forbiddenUpdateApproval.res.status,403);
+const confirmedCorrection=await request('/v1/memory-updates/'+proposedCorrection.id+'/approve','POST');
+assert.equal(confirmedCorrection.res.status,200,JSON.stringify(confirmedCorrection.data));
+const corrected=await request('/v1/memories/'+afterApprove.data.items[0].id);
+assert.equal(corrected.data.title,'MCP synthetic corrected project');
+const duplicatedCorrection=await request('/v1/memory-updates/'+proposedCorrection.id+'/approve','POST');
+assert.equal(duplicatedCorrection.res.status,409);
+
 
 const homepage=await fetch(base+'/');
 assert.equal(homepage.status,200);
