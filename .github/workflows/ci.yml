@@ -16,6 +16,8 @@ jobs:
       - run: npm run check
       - run: npx wrangler d1 migrations apply memory-hub --local
       - run: npx wrangler d1 execute memory-hub --local --command "SELECT count(*) AS tables_found FROM sqlite_master WHERE type='table' AND name IN ('memories','memory_proposals','memory_revisions');"
+      - name: Diagnose deployed public OAuth and MCP endpoints (no credentials)
+        run: node scripts/check-live-oauth.mjs
       - name: End-to-end Worker smoke test
         run: |
           npx wrangler dev --local --port 8787 \
