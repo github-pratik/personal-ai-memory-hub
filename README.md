@@ -57,7 +57,7 @@ The public endpoint does **not** mean private memory is publicly accessible: pri
 |---|---|---|
 | **Grok** | Grok **Custom MCP Connector** or Grok Build remote HTTP MCP | **Not yet** |
 | **Claude** | Custom remote MCP with `No sign-in` + restricted `Authorization: Bearer …` request header | **Yes: tool discovery and `search_memory` (owner-reported)** |
-| **ChatGPT** | Custom MCP/plugin connection subject to current authentication and account support | **Not yet** |
+| **ChatGPT** | Custom Streamable HTTP MCP using restricted Bearer Authorization header | **Yes: all five tools discovered, search and get verified (owner-reported)** |
 | **Gemini** | Compatible MCP client or adapter, subject to its available runtime | **Not yet** |
 | Other MCP clients | Streamable HTTP compatibility and credential configuration | **Not yet** |
 
