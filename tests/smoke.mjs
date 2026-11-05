@@ -136,6 +136,37 @@ const afterConflict=await request('/v1/memories/'+afterApprove.data.items[0].id)
 assert.equal(afterConflict.data.title,'Owner corrected project');
 const rejectedUpdate=await request('/v1/memory-updates/'+stale.id+'/reject','POST');
 assert.equal(rejectedUpdate.res.status,200);
+// Regression: a dashboard can display a proposed correction for an archived
+// memory; ordinary approval must fail, but explicit owner restore-and-approve works.
+const archivedCreate=await request('/v1/memories','POST',{
+ title:'Archived correction fixture',body:'Original synthetic data',category:'other',source:'Synthetic test'
+});
+assert.equal(archivedCreate.res.status,201);
+const archivedMemoryId=archivedCreate.data.id;
+const archivedCandidate=await mcp('tools/call',{name:'propose_memory_update',arguments:{
+ memory_id:archivedMemoryId,title:'Restored and corrected fixture',body:'Corrected synthetic data',
+ category:'other',source:'Explicit synthetic recovery test'
+}});
+assert.equal(archivedCandidate.status,200);
+const archivedProposal=JSON.parse((await archivedCandidate.json()).result.content[0].text);
+const archival=await request('/v1/memories/'+archivedMemoryId,'DELETE');
+assert.equal(archival.res.status,200);
+const ordinaryApproval=await request('/v1/memory-updates/'+archivedProposal.id+'/approve','POST');
+assert.equal(ordinaryApproval.res.status,409);
+assert.match(ordinaryApproval.data.error,/no longer approved/i);
+const forbiddenRestore=await request('/v1/memory-updates/'+archivedProposal.id+'/restore-approve','POST',undefined,agent);
+assert.equal(forbiddenRestore.res.status,403);
+const recovery=await request('/v1/memory-updates/'+archivedProposal.id+'/restore-approve','POST');
+assert.equal(recovery.res.status,200,JSON.stringify(recovery.data));
+assert.equal(recovery.data.restored,true);
+const recoveredRecord=await request('/v1/memories/'+archivedMemoryId);
+assert.equal(recoveredRecord.res.status,200);
+assert.equal(recoveredRecord.data.title,'Restored and corrected fixture');
+assert.equal(recoveredRecord.data.state,'approved');
+const recoveryRepeat=await request('/v1/memory-updates/'+archivedProposal.id+'/restore-approve','POST');
+assert.equal(recoveryRepeat.res.status,200);
+assert.equal(recoveryRepeat.data.already_applied,true);
+
 
 
 
