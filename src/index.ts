@@ -63,6 +63,11 @@ const worker = {
     }
     // A scoped, short-lived OAuth token authorizes MCP only, never REST owner routes.
     if(path==='/mcp'){
+      // Stateless Streamable HTTP supports POST only. Clients probing GET or
+      // DELETE for an optional SSE stream should receive 405, not an auth denial.
+      if(method==='GET'||method==='DELETE')return new Response(null,{
+        status:405,headers:{'allow':'POST','cache-control':'no-store'}
+      });
       if(!env.DB)return err('Database binding missing',503);
       const staticRole=roleOf(request.headers.get('authorization'),env);
       const scopes=staticRole?null:await oauthScopes(request,env);
