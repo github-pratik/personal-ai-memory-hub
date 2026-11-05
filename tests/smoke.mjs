@@ -117,6 +117,25 @@ const corrected=await request('/v1/memories/'+afterApprove.data.items[0].id);
 assert.equal(corrected.data.title,'MCP synthetic corrected project');
 const duplicatedCorrection=await request('/v1/memory-updates/'+proposedCorrection.id+'/approve','POST');
 assert.equal(duplicatedCorrection.res.status,409);
+const staleSuggestion=await mcp('tools/call',{name:'propose_memory_update',arguments:{
+ memory_id:afterApprove.data.items[0].id,
+ title:'Stale suggestion that must never be applied',
+ body:'This proposal is invalidated when the owner changes the record',
+ category:'project',
+ source:'Synthetic optimistic-concurrency test'
+}});
+const stale=JSON.parse((await staleSuggestion.json()).result.content[0].text);
+const manuallyUpdated=await request('/v1/memories/'+afterApprove.data.items[0].id,'PATCH',{
+ title:'Owner corrected project',body:'The owner manually corrected this synthetic project',category:'project',source:'Synthetic owner override'
+});
+assert.equal(manuallyUpdated.res.status,200);
+const staleDecision=await request('/v1/memory-updates/'+stale.id+'/approve','POST');
+assert.equal(staleDecision.res.status,409);
+const afterConflict=await request('/v1/memories/'+afterApprove.data.items[0].id);
+assert.equal(afterConflict.data.title,'Owner corrected project');
+const rejectedUpdate=await request('/v1/memory-updates/'+stale.id+'/reject','POST');
+assert.equal(rejectedUpdate.res.status,200);
+
 
 
 const homepage=await fetch(base+'/');
