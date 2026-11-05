@@ -16,13 +16,13 @@ test('missing Origin and Referer are rejected',()=>{
  assert.equal(validFormOrigin(new Request(base+'/login',{method:'POST'})),false);
 });
 test('cross-origin and malformed sources are rejected',()=>{
- for(const headers of [
+ for(const headers of ([
   {origin:'https://evil.example'},
   {origin:'null',referer:base+'/login'},
   {referer:'https://evil.example/form'},
   {referer:'invalid'},
   {origin:'https://evil.example',referer:base+'/login'}
- ]){
+ ] as Record<string,string>[])){
   assert.equal(validFormOrigin(new Request(base+'/login',{method:'POST',headers})),false);
  }
 });
