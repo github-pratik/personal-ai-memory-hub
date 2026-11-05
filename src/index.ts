@@ -72,9 +72,10 @@ const worker = {
       const staticRole=roleOf(request.headers.get('authorization'),env);
       const scopes=staticRole?null:await oauthScopes(request,env);
       if(!staticRole&&!scopes){
-        // Grok needs an anonymous initialize handshake to recognize the
-        // server. Challenge the next tools/list call to initiate OAuth before
-        // exposing a usable tool inventory. No data or private tools execute.
+        // Grok needs anonymous initialize and tool-list discovery.
+        // Challenging tools/list caused the host to show zero tools.
+        // Expose only schemas; challenge all protected tools/call requests.
+        // No unauthenticated private data access or proposal is allowed.
         if(path==='/grok/mcp'){
           if(method==='POST'){
             try{
@@ -83,7 +84,7 @@ const worker = {
                 const p:unknown=JSON.parse(raw);
                 if(p&&typeof p==='object'&&!Array.isArray(p)){
                   const rpc=p as Record<string,unknown>;
-                  if(rpc.jsonrpc==='2.0' && ['initialize','ping','notifications/initialized'].includes(String(rpc.method||''))){
+                  if(rpc.jsonrpc==='2.0' && ['initialize','ping','notifications/initialized','tools/list'].includes(String(rpc.method||''))){
                     return handleMcp(request,env);
                   }
                 }
