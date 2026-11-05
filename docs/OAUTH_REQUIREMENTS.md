@@ -32,18 +32,18 @@ A user can connect multiple AI assistants to **one private memory database** and
 - CIMD/client metadata URL validation and private-key JWT clients.
 - Multi-user accounts, per-user memory isolation, fine-grained per-client quotas, audit review, account linking UX.
 - Structured application-tracker schema. Until implemented, a job application is an approved `other` memory titled `Job application: ...`, and resume policies use `preference`; corrections target the same existing UUID.
-- Actual ChatGPT and Grok end-to-end connection tests: these require user-side app connection after Cloudflare deploy.
+- Hosted OAuth end-to-end sign-in remains unverified. ChatGPT and Claude have completed real-client end-to-end memory sharing via restricted Bearer headers. Grok remains unconnected.
 
 ## Current release checklist
 
 - [x] Existing archived-memory approval error diagnosed and explicit owner recovery implemented with regression tests.
 - [x] OAuth metadata, DCR, PKCE, consent, access tokens and scoped MCP authorization implemented.
 - [x] Unit tests and end-to-end local smoke tests run in GitHub Actions.
-- [ ] Deploy current `main` to Cloudflare using a **new** manual workflow run.
-- [ ] Complete ChatGPT custom MCP connection with OAuth.
-- [ ] Read the already-approved Claude test memory through ChatGPT.
-- [ ] Propose a synthetic correction from ChatGPT and approve it from the dashboard.
-- [ ] Test Grok separately; reconcile any additional connector-specific OAuth client requirements.
+- [x] Deploy the OAuth implementation to Cloudflare (live public discovery probes passed). Deploy later code changes separately when required.
+- [x] Complete ChatGPT custom MCP connection using restricted Bearer header (OAuth hosted sign-in remains unverified).
+- [x] Read the already-approved Claude test memory through ChatGPT.
+- [x] Propose a synthetic correction from ChatGPT, approve it in the dashboard, and verify the result in Claude.
+- [ ] Register Grok's exact callback via the manual [Grok client registration workflow](../.github/workflows/register-grok.yml), connect, and test read/propose in Grok.
 - [ ] Complete independent production security review, token rotation/revocation, and abuse testing before real sensitive data.
 
 ## References
