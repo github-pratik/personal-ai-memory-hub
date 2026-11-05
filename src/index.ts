@@ -89,14 +89,17 @@ const worker = {
             return handleMcp(request,env);
           }
           if(message?.jsonrpc==='2.0'&&message.method==='tools/call'){
-            // Tool-level OAuth error gives ChatGPT an actionable link prompt.
-            // Returning tool metadata does not grant permission to execute it.
-            const id=typeof message.id==='string'||typeof message.id==='number'?message.id:null;
-            const challenge=oauthChallenge(request)+', error="invalid_token", error_description="Sign in to Personal AI Memory Hub to use this tool"';
-            return json({jsonrpc:'2.0',id,result:{
-              content:[{type:'text',text:'Authentication required. Connect your Personal AI Memory Hub account first.'}],
-              isError:true,_meta:{'mcp/www_authenticate':[challenge]}
-            }});
+            // Protected MCP calls MUST challenge at HTTP transport level.
+            // A JSON-RPC 200 tool error is not an OAuth trigger for many hosts.
+            const challenge=oauthChallenge(request)+', error="invalid_token", error_description="Sign in to Personal AI Memory Hub"';
+            return new Response(JSON.stringify({error:'authentication_required'}),{
+              status:401,headers:{
+                'content-type':'application/json; charset=utf-8',
+                'cache-control':'no-store',
+                'x-content-type-options':'nosniff',
+                'www-authenticate':challenge
+              }
+            });
           }
         }
         return new Response(JSON.stringify({error:'Unauthorized'}),{
