@@ -22,7 +22,7 @@ The private dashboard is a management interface. Resume tailoring is an importan
 2. Signed-session private browser dashboard, memory CRUD/archive and versioning.
 3. Proposed fact approval queue, import and backup export.
 4. Keyword-based resume/job evidence matching.
-5. Authenticated JSON-RPC MCP server with three read-only tools.
+5. Authenticated JSON-RPC MCP server with three read-only tools plus a fourth pending-only `propose_memory` tool. Approved memories still require owner action.
 6. Tests, CI, and manual Cloudflare deployment.
 
 ## Current milestone: client interoperability
@@ -31,7 +31,7 @@ The private dashboard is a management interface. Resume tailoring is an importan
 - Verify `initialize`, `tools/list`, `tools/call` on hosted MCP using a real compatible client.
 - Test Grok, Claude, ChatGPT and Gemini individually and document actual auth/transport behavior.
 - Where necessary, implement standards-compliant OAuth, compatibility features and secure scopes.
-- Verify that clients cannot read without authorization or modify approved facts.
+- Verify that clients cannot read without authorization or modify approved facts; `propose_memory` may only create pending suggestions.
 - Only then import private personal memories.
 
 ## Explicitly not promised
