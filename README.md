@@ -17,19 +17,19 @@ ChatGPT / Claude / Grok / Gemini / compatible MCP clients
                     |
    Personal AI Memory Hub (Cloudflare Worker)
         |                  |
-   3 read + 1 propose    private dashboard
+   3 read + 2 propose    private dashboard
         |                  |
              Cloudflare D1
       approved facts + provenance
 ```
 
-**Core mission:** interoperate with AI assistants. The dashboard and resume features are interfaces to that shared memory, not the final product on their own. **Current rollout priority: connecting and verifying real AI clients before importing personal career facts.**
+**Core mission:** interoperate with AI assistants. The dashboard, job application tracking and resume instructions are workflows on that shared memory, not the final product on their own. **Current rollout priority: connecting and verifying real AI clients before importing personal career facts.**
 
 ## Live deployment
 
 - **Worker:** https://personal-ai-memory-hub.p-pshpatil.workers.dev
 - **MCP endpoint:** `https://personal-ai-memory-hub.p-pshpatil.workers.dev/mcp`
-- **Status:** Worker deployed; private browser login and dashboard verified by the owner, GitHub CI green on the login fix. **Claude previously discovered the original three MCP tools and called `search_memory`**, returning `{"items":[]}` with no error (owner-reported live test). The new `propose_memory` tool must still be verified by Claude after redeployment; other clients are pending.
+- **Status:** Worker deployed; private browser login and dashboard verified by the owner, GitHub CI green on the login fix. **Claude previously discovered the original three MCP tools and called `search_memory`**, returning `{"items":[]}` with no error (owner-reported live test). The new proposal and correction tools must still be verified by Claude after redeployment; other clients are pending.
 - **Memory database:** empty by choice during integration setup; no production career facts should be published to this repository.
 - **Email OTP:** Cloudflare Access integration code exists, but Access policy and passwordless browser sign-in are **not enabled**. The current login uses a private access key.
 
@@ -43,11 +43,12 @@ The public endpoint does **not** mean private memory is publicly accessible: pri
 - Bulk import and JSON backup/export.
 - Rank approved career evidence against job descriptions using free keyword matching (not a generative model).
 - Separate owner and agent Bearer credentials.
-- Authenticated remote JSON-RPC MCP endpoint exposing **three read-only tools and one pending-proposal tool**:
+- Authenticated remote JSON-RPC MCP endpoint exposing **three read-only tools and two pending-proposal tools**:
   - `search_memory` — query source-linked, approved memories.
   - `get_memory` — fetch one approved memory by ID.
   - `match_job` — rank evidence against a job description.
-  - `propose_memory` — submit a user-requested suggestion to the **pending owner-review queue**, never directly to approved memories.
+  - `propose_memory` — submit a new user-requested suggestion to the **pending owner-review queue**, never directly to approved memories.
+  - `propose_memory_update` — propose replacing an existing approved fact, with version checking and explicit owner approval.
 - GitHub Actions CI with unit tests, Worker smoke tests and D1 migration tests; manual Cloudflare deployment.
 
 ## Assistant integration roadmap
@@ -71,7 +72,7 @@ The public endpoint does **not** mean private memory is publicly accessible: pri
 | Browser session | Signed 12-hour HttpOnly cookie |
 | Optional browser SSO | Cloudflare Access email OTP (not yet enabled) |
 | MCP and REST API | HTTPS + owner/agent Bearer tokens |
-| Memory integrity | Approved facts only; pending AI suggestions |
+| Memory integrity | Approved facts only; owner-reviewed new and correction proposals |
 | Evidence matching | Deterministic keyword overlap |
 | Agent access | Narrower than owner access; MCP can read approved records and submit pending proposals only |
 
@@ -94,6 +95,7 @@ Create a local `.dev.vars` from `.env.example` with a **random, at least 32-char
 - [Project purpose and MVP](docs/MVP.md)
 - [Current status and outstanding integration gates](docs/STATUS.md)
 - [Remote MCP tools and authentication](docs/MCP.md)
+- [Cross-assistant memory updates, job applications and resume guidelines](docs/CROSS_ASSISTANT_UPDATES.md)
 - [Grok connector setup](docs/GROK.md)
 - [Deployment instructions](docs/DEPLOYMENT.md)
 - [Cloudflare Access email OTP](docs/CLOUDFLARE_ACCESS_OTP.md)
