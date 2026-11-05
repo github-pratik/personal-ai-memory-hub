@@ -28,3 +28,7 @@ Third-party connector auth compatibility; OAuth/authorization scope and refresh;
 Before adding private facts, complete live auth tests, an independent security review and backup/recovery validation.
 
 **Never paste secrets into chats, screenshots, logs or code.**
+
+### Archived memory corrections
+
+Ordinary correction approval refuses archived memories. In the dashboard, an archived target is explicitly labeled **Archived target** and normal approval is replaced with the owner-only **Restore archived memory and approve correction** action. That distinct action intentionally reactivates the archived memory, applies the reviewed correction in a D1 transactional batch, and appends a revision. It must never be triggered by an MCP agent, a normal approval, or without an explicit owner click. Stale approved records are still blocked and require a fresh proposal.
