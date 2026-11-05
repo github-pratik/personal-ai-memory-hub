@@ -11,7 +11,7 @@ async function check(label,path,init={},expected=200){
   if(label==='issuer')record.issuer=data?.issuer,record.registration_endpoint=data?.registration_endpoint,record.scopes_supported=data?.scopes_supported;
   if(label==='initialize')record.name=data?.result?.serverInfo?.name,record.error=data?.error?.message;
   if(label==='tools')record.tool_count=data?.result?.tools?.length,record.names=data?.result?.tools?.map(x=>x.name),record.security=data?.result?.tools?.map(x=>x.securitySchemes);
-  if(label==='challenge')record.isError=data?.result?.isError,record.has_meta=!!data?.result?._meta?.['mcp/www_authenticate'],record.www_authenticate=!!response.headers.get('www-authenticate');
+  if(label==='challenge')record.www_authenticate=!!response.headers.get('www-authenticate'),record.resource_metadata=(response.headers.get('www-authenticate')||'').includes('resource_metadata=');
   results.push(record);console.log(JSON.stringify(record));
   if(response.status!==expected)process.exitCode=1;
  }catch(e){console.log(JSON.stringify({label,error:String(e).slice(0,180)}));process.exitCode=1}
@@ -23,4 +23,4 @@ await check('resource_mcp','/.well-known/oauth-protected-resource/mcp');
 await check('issuer','/.well-known/oauth-authorization-server');
 await check('initialize','/mcp',rpc('initialize',{protocolVersion:'2025-06-18',clientInfo:{name:'remote-probe',version:'1'},capabilities:{}}));
 await check('tools','/mcp',rpc('tools/list'));
-await check('challenge','/mcp',rpc('tools/call',{name:'search_memory',arguments:{query:'does-not-read'}}));
+await check('challenge','/mcp',rpc('tools/call',{name:'search_memory',arguments:{query:'does-not-read'}}),401);
