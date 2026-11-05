@@ -8,7 +8,7 @@ Updated: November 4, 2026 (US Eastern).
 - Deployment #4 included the login-origin fix and succeeded; owner verified the login and dashboard in a browser.
 - Cloudflare D1 migrations applied. Owner key is configured privately.
 - Browser dashboard supports approved memory management, proposals, import/export, and job matching.
-- MCP endpoint exists at `/mcp` with read-only `search_memory`, `get_memory`, `match_job`, plus newly implemented `propose_memory` and `propose_memory_update`. Both create pending review items only; owner approval of a correction uses a version check. Live redeployment and Claude verification of the new proposal tools are pending.
+- MCP endpoint exists at `/mcp` with read-only `search_memory`, `get_memory`, `match_job`, plus newly implemented `propose_memory` and `propose_memory_update`. Both create pending review items only; owner approval of a correction uses a version check. The updated Worker has been deployed successfully. Claude discovered all five tools and submitted a synthetic `propose_memory` record with status `pending` (owner-reported). Live approval/rejection and `propose_memory_update` remain to be tested.
 - **Claude live MCP test (reported by owner):** connector discovered the original three tool descriptions, called `search_memory` with `query: "Python"`, and received `{"items":[]}` without an error. This validates that one external AI client can read from the empty approved-memory store; it does not validate all tool calls, writes, or other clients.
 - Unit, TypeScript, D1 local migration, and Worker smoke tests passed on the current tested release.
 
@@ -21,7 +21,7 @@ The owner chose to leave production memories empty until integrations are valida
 ## Not yet verified / still to do
 
 1. Add a separate restricted `MEMORY_AGENT_TOKEN` to GitHub's `production` environment secrets and run a **new** manual deployment on current `main`. Do not share the owner key.
-2. Deploy and verify `propose_memory` and `propose_memory_update` from Claude; confirm new facts and corrections remain pending until owner approval. Then complete unauthorized access and transport tests.
+2. Verify pending synthetic proposal `ce7f0252-848a-45f7-a0d5-53acc4bb8e45` appears in the owner dashboard, then reject it; follow with a full `propose_memory_update` end-to-end review test. Then complete unauthorized access and transport tests.
 3. Connect Grok with its custom MCP connector; its current onboarding requested OAuth credentials, which our endpoint does not implement yet. See [Grok setup](GROK.md).
 4. Connect Claude, ChatGPT (subject to account support) and Gemini, adapting auth safely where necessary.
 5. Enable Cloudflare Access email OTP for browser sign-in (optional, not yet configured).
