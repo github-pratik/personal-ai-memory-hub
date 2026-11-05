@@ -270,5 +270,31 @@ assert.equal((await oauthMcp.json()).result.tools.length,5);
 const oauthCannotApprove=await fetch(base+'/v1/memory-updates/'+proposedCorrection.id+'/approve',{
  method:'POST',headers:{authorization:'Bearer '+accessToken}});
 assert.equal(oauthCannotApprove.status,401);
+// An OAuth client granted only read scope must not discover or invoke writes.
+const readQuery=new URLSearchParams(authQuery);readQuery.set('scope','memory:read');
+const readAuthUrl=base+'/oauth/authorize?'+readQuery;
+const readConsent=await fetch(readAuthUrl,{method:'POST',redirect:'manual',
+ headers:{cookie,origin:base,'content-type':'application/x-www-form-urlencoded'},body:'decision=approve'});
+assert.equal(readConsent.status,303);
+const readCode=new URL(readConsent.headers.get('location')).searchParams.get('code');
+const readToken=await fetch(base+'/oauth/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},
+ body:new URLSearchParams({...tokenArgs,code:readCode})});
+assert.equal(readToken.status,200);
+const readAccess=(await readToken.json()).access_token;
+const readTools=await fetch(base+'/mcp',{method:'POST',headers:{authorization:'Bearer '+readAccess,'content-type':'application/json'},
+ body:JSON.stringify({jsonrpc:'2.0',id:60,method:'tools/list'})});
+assert.equal(readTools.status,200);
+const readonlyNames=(await readTools.json()).result.tools.map(t=>t.name);
+assert.ok(readonlyNames.includes('search_memory'));
+assert.ok(!readonlyNames.includes('propose_memory'));
+assert.ok(!readonlyNames.includes('propose_memory_update'));
+const writeDenied=await fetch(base+'/mcp',{method:'POST',headers:{authorization:'Bearer '+readAccess,'content-type':'application/json'},
+ body:JSON.stringify({jsonrpc:'2.0',id:61,method:'tools/call',
+ params:{name:'propose_memory',arguments:{title:'Should not save',body:'No write access',category:'other',source:'Auth test'}}})});
+assert.equal(writeDenied.status,403);
+const legacyAgent=await mcp('tools/list');
+assert.equal(legacyAgent.status,200);
+assert.equal((await legacyAgent.json()).result.tools.length,5);
+
 
 console.log('End-to-end smoke test passed: auth, memories, evidence match, approvals, browser, export.');
