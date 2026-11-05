@@ -10,7 +10,7 @@
 https://personal-ai-memory-hub.p-pshpatil.workers.dev/mcp
 ```
 
-The Worker is deployed. **Claude has been verified by the owner** to discover the original three tools and successfully call `search_memory` with `query: "Python"`; the expected response was `{"items":[]}`. Other clients have not been verified. The memory store is deliberately empty while integration is tested.
+The Worker is deployed. **Claude has been verified by the owner** to discover the original three tools and successfully call `search_memory` with `query: "Python"`; the expected response was `{"items":[]}`. Claude has also discovered all five tools and submitted synthetic proposal `ce7f0252-848a-45f7-a0d5-53acc4bb8e45` with `pending` status. This is an owner-reported integration result, not an independently queried production DB. Other clients have not been verified.
 
 ## Current MCP implementation
 
