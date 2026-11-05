@@ -23,7 +23,7 @@ button.secondary,.button.secondary{background:#edf2f9;color:#1b437d}.row{display
 .login{max-width:430px;margin:12vh auto}.error{color:#9a2626}.search{margin-bottom:18px}.search .row input{flex:1}
 @media(max-width:760px){.grid{grid-template-columns:1fr}main{padding:20px 14px}h1{font-size:22px}header{align-items:flex-start}}
 `;
-const headers={'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','x-frame-options':'DENY','content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"};
+const headers={'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'same-origin','x-frame-options':'DENY','content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"};
 const page=(body:string)=>new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Personal AI Memory Hub</title><style>${css}</style></head><body><main>${body}</main></body></html>`,{headers});
 const redirect=(to:string,extra:Record<string,string>={})=>new Response(null,{status:303,headers:{location:to,'cache-control':'no-store',...extra}});
 const e=(v:unknown)=>escapeHtml(v);
