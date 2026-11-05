@@ -4,7 +4,7 @@ import { rankEvidence, type Evidence } from './relevance';
 import { handleUi } from './ui';
 import { authorized, safeLimit, validateMemoryInput, validId } from './domain';
 
-interface Env { DB: D1Database; MEMORY_API_TOKEN: string; MEMORY_AGENT_TOKEN?: string }
+interface Env { DB: D1Database; MEMORY_API_TOKEN: string; MEMORY_AGENT_TOKEN?: string; ACCESS_REQUIRED?: string; ACCESS_ALLOWED_EMAIL?: string }
 type Role = 'owner' | 'agent';
 const json = (data:unknown, status=200) => new Response(JSON.stringify(data), {
   status, headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}
@@ -32,14 +32,24 @@ async function parseJson(request:Request):Promise<unknown>{
   return JSON.parse(text);
 }
 const worker = {
-  async fetch(request:Request,env:Env):Promise<Response>{
+  async fetch(request:Request,env:Env,ctx?:ExecutionContext):Promise<Response>{
     const url=new URL(request.url),path=url.pathname,method=request.method;
     if(path==='/'||path==='/login'||path==='/logout'||path==='/export'||path.startsWith('/ui/')){
+      let accessAuthorized=false;
+      if(env.ACCESS_REQUIRED==='true'){
+        const access=(ctx as (ExecutionContext & {access?:{getIdentity:()=>Promise<{email?:string}|null>}}) | undefined)?.access;
+        if(!access||!env.ACCESS_ALLOWED_EMAIL?.includes('@'))return err('Cloudflare Access authentication required',403);
+        try{
+          const identity=await access.getIdentity();
+          accessAuthorized=!!identity?.email && identity.email.toLowerCase()===env.ACCESS_ALLOWED_EMAIL.trim().toLowerCase();
+        }catch{return err('Cloudflare Access authentication failed',403)}
+        if(!accessAuthorized)return err('Forbidden',403);
+      }
       const result=await handleUi(request,env,(target,action,body)=>worker.fetch(new Request(new URL(target,url),{
         method:action,
         headers:{authorization:'Bearer '+env.MEMORY_API_TOKEN,...(body?{'content-type':'application/json'}:{})},
         body:body?JSON.stringify(body):undefined
-      }),env));
+      }),env),accessAuthorized);
       if(result)return result;
     }
     if(path==='/health' && method==='GET')return json({status:'ok',service:'personal-ai-memory-hub',version:'0.2.0'});
