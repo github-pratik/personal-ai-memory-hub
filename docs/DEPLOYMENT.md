@@ -16,6 +16,10 @@ The code is ready to run locally and has an automated, **manual-release** Cloudf
 
 The deployment workflow migrates D1, deploys the Worker and sets Worker secrets. The public `/health` route contains no personal information. The dashboard and private endpoints deny access until authentication is configured.
 
+## Optional passwordless email OTP
+
+After the first successful deployment, configure Cloudflare Access to protect **all traffic** for this Worker and allow only your email address. Then set GitHub production environment secret `ACCESS_ALLOWED_EMAIL` and environment variable `ACCESS_REQUIRED=true`, and redeploy. The Worker then validates the trusted Cloudflare `ctx.access` identity instead of showing its password login form. See [OTP rollout instructions](CLOUDFLARE_ACCESS_OTP.md). Never enable the runtime switch without first configuring the Access policy.
+
 ## After deployment
 
 - Open the reported `workers.dev` URL over HTTPS.
