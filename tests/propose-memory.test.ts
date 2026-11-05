@@ -64,7 +64,10 @@ test('agent proposal is persisted only to pending review and preserves source',a
 test('unauthenticated requests cannot propose',async()=>{
  const {env,proposals}=fixture();
  const res=await call(env,'propose_memory',valid,'invalid');
- assert.equal(res.status,401);
+ assert.equal(res.status,200);
+ const payload=(await res.json() as any).result;
+ assert.equal(payload.isError,true);
+ assert.match(payload._meta['mcp/www_authenticate'][0],/invalid_token/);
  assert.equal(proposals.length,0);
 });
 test('invalid or oversized proposals never reach database',async()=>{
