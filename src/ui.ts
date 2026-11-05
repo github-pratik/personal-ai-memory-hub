@@ -136,7 +136,10 @@ export async function handleUi(request:Request,env:Env,internal:InternalApi,acce
  const updateDecision=path.match(/^\/ui\/memory-updates\/([^/]+)\/(approve|reject)$/);
  if(updateDecision&&method==='POST'){
    const response=await internal('/v1/memory-updates/'+updateDecision[1]+'/'+updateDecision[2],'POST');
-   return response.ok?redirect('/'):simpleError('Correction could not be applied. The original memory may have changed since the proposal.',response.status);
+   if(response.ok)return redirect('/');
+   let message='Correction could not be applied.';
+   try{const data=await response.json() as {error?:string};if(typeof data.error==='string')message+=' '+data.error}catch{}
+   return simpleError(message,response.status);
  }
  const archive=path.match(/^\/ui\/memories\/([^/]+)\/archive$/);
  if(archive&&method==='POST'){
