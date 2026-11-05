@@ -53,6 +53,15 @@ The workflow registers **only** `https://grok.com/connectors-oauth-exchange-code
 
 **Limitations:** OAuth tokens expire after one hour and there is no refresh-token flow or revocation dashboard yet. A real hosted Grok session has not been tested. We must resolve any incompatibility without weakening the private memory boundary.
 
+## Recommended Grok endpoint (November 5 update)
+
+**Use `https://personal-ai-memory-hub.p-pshpatil.workers.dev/grok/mcp` for Grok, not the generic `/mcp`.** The generic endpoint intentionally permits unauthenticated tool *discovery* for compatibility, which caused Grok to show Connected without starting OAuth. The new Grok-only path immediately challenges every unauthenticated request with HTTP 401 and points to its path-specific protected resource metadata (`/.well-known/oauth-protected-resource/grok/mcp`). After a successful OAuth sign-in it exposes the same five tools and the same D1 database. Existing Claude and ChatGPT clients stay on `/mcp`.
+
+The OAuth server also accepts Grok's **publicly published OAuth client identifier** `https://grok.com/oauth/mcp-client.json` as a pinned, preconfigured public client. Only the exact published Grok and xAI console redirect URLs are accepted. Private keys are never sent to Grok. No Grok client ID registration workflow is needed for this identity.
+
+To test: deploy the latest `main` manually, disconnect the previously misidentified Grok custom connector, create a new custom connector with the **/grok/mcp** URL, finish owner sign-in/consent, then call `search_memory`. The previous `/mcp` connector may continue to say Connected without authentication; do not reuse it. Live sign-in and readback are **not yet verified**.
+
+
 ## Troubleshooting
 
 - **OAuth form cannot discover client:** Grok might not support DCR in its web flow. Obtain its exact callback URI, then register and paste the issued client ID; never fabricate one.
