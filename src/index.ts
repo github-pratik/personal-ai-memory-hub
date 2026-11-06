@@ -222,6 +222,10 @@ const worker = {
       }
       if(path==='/v1/proposals' && method==='POST'){
         const data=validateMemoryInput(await parseJson(request));if(!data.ok)return err(data.error,400);
+        // REST agent proposals share the same bounded review queue as MCP proposals.
+        // Never let a misconfigured connector grow the pending queue without limit.
+        const pending=await env.DB.prepare("SELECT COUNT(*) AS count FROM memory_proposals WHERE status='pending'").first<{count:number}>();
+        if(Number(pending?.count??0)>=100)return err('Pending review queue is full (100). Ask the owner to review proposals.',429);
         const id=crypto.randomUUID(),date=now(),v=data.value;
         await env.DB.prepare('INSERT INTO memory_proposals (id,title,body,category,source,created_at) VALUES (?,?,?,?,?,?)').bind(id,v.title,v.body,v.category,v.source,date).run();
         return json({id,status:'pending'},201);
