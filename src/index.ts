@@ -224,10 +224,13 @@ const worker = {
         const data=validateMemoryInput(await parseJson(request));if(!data.ok)return err(data.error,400);
         // REST agent proposals share the same bounded review queue as MCP proposals.
         // Never let a misconfigured connector grow the pending queue without limit.
-        const pending=await env.DB.prepare("SELECT COUNT(*) AS count FROM memory_proposals WHERE status='pending'").first<{count:number}>();
-        if(Number(pending?.count??0)>=100)return err('Pending review queue is full (100). Ask the owner to review proposals.',429);
+        // Enforce the cap inside the INSERT statement, not via a separate COUNT
+        // read. Concurrent requests must not both pass a stale quota check.
         const id=crypto.randomUUID(),date=now(),v=data.value;
-        await env.DB.prepare('INSERT INTO memory_proposals (id,title,body,category,source,created_at) VALUES (?,?,?,?,?,?)').bind(id,v.title,v.body,v.category,v.source,date).run();
+        const inserted=await env.DB.prepare(`INSERT INTO memory_proposals (id,title,body,category,source,created_at)
+          SELECT ?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM memory_proposals WHERE status='pending') < 100`)
+          .bind(id,v.title,v.body,v.category,v.source,date).run();
+        if(inserted.meta.changes!==1)return err('Pending review queue is full (100). Ask the owner to review proposals.',429);
         return json({id,status:'pending'},201);
       }
       if(path==='/v1/proposals' && method==='GET'){
