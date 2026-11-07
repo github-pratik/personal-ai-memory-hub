@@ -8,8 +8,11 @@ function harness(count:number){
  let inserted=0;
  const db={
   prepare(sql:string){
-   if(sql.includes('COUNT(*)'))return {first:async()=>({count})};
-   if(sql.startsWith('INSERT INTO memory_proposals'))return {bind:()=>({run:async()=>{inserted++;}})};
+   if(sql.startsWith('INSERT INTO memory_proposals') && sql.includes('SELECT COUNT(*)'))return {bind:()=>({run:async()=>{
+    if(count+inserted>=100)return {meta:{changes:0}};
+    inserted++;
+    return {meta:{changes:1}};
+   }})};
    throw new Error('Unexpected SQL: '+sql);
   }
  } as unknown as D1Database;
@@ -36,4 +39,13 @@ test('owner REST proposal path obeys the same quota',async()=>{
  const h=harness(100),response=await h.request(owner);
  assert.equal(response.status,429);
  assert.equal(h.insertions(),0);
+});
+
+test('REST quota check and insert use one SQL statement',async()=>{
+ const h=harness(99);
+ const first=await h.request(agent);
+ const second=await h.request(agent);
+ assert.equal(first.status,201);
+ assert.equal(second.status,429);
+ assert.equal(h.insertions(),1);
 });
