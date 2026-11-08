@@ -13,12 +13,19 @@ function fixture(){
      const stmt={
        bind(...args:unknown[]){values=args;return stmt},
        async first(){
-         if(sql.startsWith('SELECT COUNT(*)'))return {count:proposals.filter(x=>x.status==='pending').length};
+         if(sql.startsWith('SELECT id,updated_at FROM memories'))return {id:values[0],updated_at:'2026-01-01T00:00:00Z'};
          throw Error('Unexpected query '+sql);
        },
        async run(){
          if(sql.startsWith('INSERT INTO memory_proposals')){
            const [id,title,body,category,source,created_at]=values as string[];
+           if(proposals.filter(x=>x.status==='pending').length>=100)return {meta:{changes:0}};
+           proposals.push({id,title,body,category,source,created_at,status:'pending'});
+           return {meta:{changes:1}};
+         }
+         if(sql.startsWith('INSERT INTO memory_update_proposals')){
+           if(proposals.filter(x=>x.status==='pending').length>=100)return {meta:{changes:0}};
+           const [id,, ,title,body,category,source,created_at]=values as string[];
            proposals.push({id,title,body,category,source,created_at,status:'pending'});
            return {meta:{changes:1}};
          }
@@ -95,4 +102,22 @@ test('MCP proposal tools never expose owner approval or direct edit operations',
  const names=(await res.json() as any).result.tools.map((t:any)=>t.name);
  assert.ok(names.includes('propose_memory_update'));
  assert.ok(!names.some((name:string)=>/approve|reject|delete|archive|^update_memory$/i.test(name)));
+});
+
+test('MCP new proposals enforce quota inside a single INSERT at the boundary',async()=>{
+ const f=fixture();
+ for(let n=0;n<99;n++)f.proposals.push({id:String(n),title:'fixture',body:'fixture',category:'project',source:'fixture',created_at:'',status:'pending'});
+ assert.equal((await call(f.env,'propose_memory',valid)).status,200);
+ assert.equal((await call(f.env,'propose_memory',valid)).status,429);
+ assert.equal(f.proposals.length,100);
+ assert.equal(f.approvedWrites,0);
+});
+test('MCP correction proposals enforce quota inside INSERT without editing approved memory',async()=>{
+ const f=fixture();
+ const update={...valid,memory_id:'123e4567-e89b-42d3-a456-426614174000'};
+ for(let n=0;n<99;n++)f.proposals.push({id:String(n),title:'fixture',body:'fixture',category:'project',source:'fixture',created_at:'',status:'pending'});
+ assert.equal((await call(f.env,'propose_memory_update',update)).status,200);
+ assert.equal((await call(f.env,'propose_memory_update',update)).status,429);
+ assert.equal(f.proposals.length,100);
+ assert.equal(f.approvedWrites,0);
 });
