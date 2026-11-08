@@ -86,13 +86,14 @@ export async function handleMcp(request:Request,env:Env,scopes?:string[]):Promis
    // Never write to approved memories from an MCP call. The owner must explicitly review.
    const validation=validateMemoryInput(a);
    if(!validation.ok)return reply(error(id,-32602,validation.error),400);
-   // Bound pending-queue growth to reduce abuse from compromised/misconfigured clients.
-   const pending=await env.DB.prepare("SELECT COUNT(*) AS count FROM memory_proposals WHERE status='pending'").first<{count:number}>();
-   if(Number(pending?.count??0)>=100)return reply(error(id,-32000,'Pending review queue is full (100). Ask the owner to review proposals.'),429);
+   // Check the quota in the INSERT itself so concurrent MCP requests cannot
+   // both pass a stale count and overfill the owner-review queue.
    const input=validation.value,idValue=crypto.randomUUID(),createdAt=new Date().toISOString();
    const source=('AI suggestion via MCP: '+input.source).slice(0,500);
-   await env.DB.prepare('INSERT INTO memory_proposals (id,title,body,category,source,created_at) VALUES (?,?,?,?,?,?)')
+   const inserted=await env.DB.prepare(`INSERT INTO memory_proposals (id,title,body,category,source,created_at)
+     SELECT ?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM memory_proposals WHERE status='pending') < 100`)
     .bind(idValue,input.title,input.body,input.category,source,createdAt).run();
+   if(inserted.meta.changes!==1)return reply(error(id,-32000,'Pending review queue is full (100). Ask the owner to review proposals.'),429);
    result={id:idValue,status:'pending',requires_owner_approval:true,message:'Proposal submitted for owner review. It is NOT an approved memory.'};
   }else if(name==='propose_memory_update'){
    if(typeof a.memory_id!=='string'||!validId(a.memory_id))return reply(error(id,-32602,'Invalid memory_id'),400);
@@ -100,12 +101,12 @@ export async function handleMcp(request:Request,env:Env,scopes?:string[]):Promis
    if(!validation.ok)return reply(error(id,-32602,validation.error),400);
    const current=await env.DB.prepare("SELECT id,updated_at FROM memories WHERE id=? AND state='approved'").bind(a.memory_id).first<{id:string;updated_at:string}>();
    if(!current)return reply(error(id,-32004,'Approved memory not found'),404);
-   const pending=await env.DB.prepare("SELECT COUNT(*) AS count FROM memory_update_proposals WHERE status='pending'").first<{count:number}>();
-   if(Number(pending?.count??0)>=100)return reply(error(id,-32000,'Pending update review queue is full (100).'),429);
    const input=validation.value,idValue=crypto.randomUUID(),createdAt=new Date().toISOString();
    const source=('AI correction via MCP: '+input.source).slice(0,500);
-   await env.DB.prepare('INSERT INTO memory_update_proposals (id,memory_id,target_updated_at,title,body,category,source,created_at) VALUES (?,?,?,?,?,?,?,?)')
+   const inserted=await env.DB.prepare(`INSERT INTO memory_update_proposals (id,memory_id,target_updated_at,title,body,category,source,created_at)
+     SELECT ?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM memory_update_proposals WHERE status='pending') < 100`)
      .bind(idValue,current.id,current.updated_at,input.title,input.body,input.category,source,createdAt).run();
+   if(inserted.meta.changes!==1)return reply(error(id,-32000,'Pending update review queue is full (100).'),429);
    result={id:idValue,memory_id:current.id,status:'pending',requires_owner_approval:true,message:'Correction submitted for owner review; approved memory is unchanged.'};
   }else return reply(error(id,-32602,'Unknown tool'),400);
   return reply(success(id,{content:[{type:'text',text:JSON.stringify(result)}]}));
