@@ -114,11 +114,13 @@ export async function handleOAuth(request:Request,env:Env):Promise<Response|null
   try{const raw=await request.text();if(raw.length>5000)return fail('invalid_client_metadata','Request too large',413);data=JSON.parse(raw)}
   catch{return fail('invalid_client_metadata','Invalid JSON')}
   if(!validClientInput(data)){oauthAudit('register_rejected',{reason:'invalid_client_metadata'});return fail('invalid_client_metadata','Invalid public client registration');}
-  const count=await env.DB.prepare('SELECT COUNT(*) AS count FROM oauth_clients').first<{count:number}>();
-  if(Number(count?.count??0)>=100)return fail('invalid_client_metadata','Client registration quota reached',429);
   const name=(data.client_name||'Unverified MCP client').trim()||'Unverified MCP client',id=crypto.randomUUID();
-  await env.DB.prepare('INSERT INTO oauth_clients (id,name,redirect_uris,created_at) VALUES (?,?,?,?)')
+  // Enforce the public registration cap in the same SQL statement as the write.
+  // Separate COUNT + INSERT requests can race and exhaust free-tier storage.
+  const inserted=await env.DB.prepare(`INSERT INTO oauth_clients (id,name,redirect_uris,created_at)
+    SELECT ?,?,?,? WHERE (SELECT COUNT(*) FROM oauth_clients) < 100`)
    .bind(id,name,JSON.stringify(data.redirect_uris),new Date().toISOString()).run();
+  if(inserted.meta.changes!==1)return fail('invalid_client_metadata','Client registration quota reached',429);
   oauthAudit('register_succeeded',{client:'registered',callback:callbackPath(data.redirect_uris[0])});
   return json({client_id:id,client_name:name,redirect_uris:data.redirect_uris,token_endpoint_auth_method:'none',
    grant_types:['authorization_code'],response_types:['code']},201);
