@@ -102,7 +102,7 @@ export async function handleOAuth(request:Request,env:Env):Promise<Response|null
  }
  if(path==='/.well-known/oauth-authorization-server'){
   if(method!=='GET')return fail('invalid_request','Only GET supported',405);
-  return json({issuer:base,authorization_endpoint:base+'/oauth/authorize',token_endpoint:base+'/oauth/token',
+  return json({issuer:base,authorization_endpoint:base+'/oauth/authorize',token_endpoint:base+'/oauth/token',revocation_endpoint:base+'/oauth/revoke',
    registration_endpoint:base+'/oauth/register',response_types_supported:['code'],
    grant_types_supported:['authorization_code'],code_challenge_methods_supported:['S256'],
    token_endpoint_auth_methods_supported:['none'],scopes_supported:scopeSet,
@@ -160,6 +160,23 @@ export async function handleOAuth(request:Request,env:Env):Promise<Response|null
   if(!authorized('Bearer '+key,env.MEMORY_API_TOKEN))return html('<h2>Sign-in failed</h2><p>Invalid owner access key.</p>');
   oauthAudit('owner_login_succeeded',{client:clientKind(p.client_id)});
   return redirect(target.toString(),sessionHeaders(await issueSession(env.MEMORY_API_TOKEN)));
+ }
+ if(path==='/oauth/revoke'){
+  // RFC 7009-style access-token revocation. Public clients must possess the
+  // exact bearer token; unknown tokens receive the same response as known ones.
+  if(method!=='POST')return fail('invalid_request','Unsupported method',405);
+  if(!(request.headers.get('content-type')||'').includes('application/x-www-form-urlencoded'))
+   return fail('invalid_request','Form-encoded request required',415);
+  const raw=await request.text();
+  if(raw.length>4000)return fail('invalid_request','Request too large',413);
+  const form=new URLSearchParams(raw),token=form.get('token')||'',clientId=form.get('client_id')||'';
+  if(!clientId||!await clientFor(env,clientId))return fail('invalid_client','Unknown client',401);
+  if(/^[A-Za-z0-9_-]{35,150}$/.test(token)){
+   await env.DB.prepare('DELETE FROM oauth_tokens WHERE token_hash=? AND client_id=?')
+    .bind(await digest(token),clientId).run();
+  }
+  oauthAudit('token_revocation_requested',{client:clientKind(clientId)});
+  return new Response(null,{status:200,headers:{'cache-control':'no-store','pragma':'no-cache'}});
  }
  if(path==='/oauth/token'){
   if(method!=='POST')return fail('invalid_request','Unsupported method',405);
