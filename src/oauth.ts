@@ -161,6 +161,20 @@ export async function handleOAuth(request:Request,env:Env):Promise<Response|null
   oauthAudit('owner_login_succeeded',{client:clientKind(p.client_id)});
   return redirect(target.toString(),sessionHeaders(await issueSession(env.MEMORY_API_TOKEN)));
  }
+ if(path==='/oauth/owner/revoke-all'){
+  // Emergency owner-only kill switch for issued OAuth access tokens and
+  // outstanding authorization codes. Does not revoke the static agent key.
+  if(method!=='POST')return fail('invalid_request','Unsupported method',405);
+  if(!validFormOrigin(request))return fail('invalid_request','Invalid form origin',403);
+  if(!await verifySession(getCookie(request.headers.get('cookie'),COOKIE_NAME),env.MEMORY_API_TOKEN))
+   return fail('access_denied','Owner sign-in required',403);
+  await env.DB.batch([
+   env.DB.prepare('DELETE FROM oauth_tokens'),
+   env.DB.prepare('DELETE FROM oauth_codes')
+  ]);
+  oauthAudit('owner_revoked_all_oauth_sessions');
+  return json({revoked:true});
+ }
  if(path==='/oauth/revoke'){
   // RFC 7009-style access-token revocation. Public clients must possess the
   // exact bearer token; unknown tokens receive the same response as known ones.
