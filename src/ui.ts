@@ -1,4 +1,5 @@
 import { authorized, validateMemoryInput } from './domain';
+import { handleOAuth } from './oauth';
 import { COOKIE_NAME, getCookie, issueSession, removeSessionHeaders, sessionHeaders, validFormOrigin, verifySession } from './session';
 
 interface Env {DB:D1Database;MEMORY_API_TOKEN:string; ACCESS_REQUIRED?:string; ACCESS_ALLOWED_EMAIL?:string}
@@ -54,6 +55,7 @@ function dashboard(memories:Row[],proposals:Row[],updates:UpdateRow[],q:string,a
  const proposalList=proposals.map(r=>card(r,true)).join('')||'<p class="muted">No pending proposals.</p>';
  const updateList=updates.map(updateCard).join('')||'<p class="muted">No pending corrections.</p>';
  return page(`<header><div><h1>Personal AI Memory Hub</h1><small>Career evidence and project history · private workspace</small></div><div class="row"><a class="button secondary" href="/export">Export backup</a>${accessMode?'<a class="button secondary" href="/cdn-cgi/access/logout">Sign out</a>':'<form action="/logout" method="post"><button class="secondary">Sign out</button></form>'}</div></header>
+ <section class="card" style="margin-bottom:20px"><h2>Connected assistant access</h2><p class="muted">Emergency action: disconnect all OAuth assistants and cancel pending OAuth sign-ins. This does not revoke static API keys or delete memories.</p>${accessMode?'<p class="muted">Use an owner-key session to manage OAuth connections. Cloudflare Access alone cannot authorize this action.</p>':'<form method="post" action="/ui/oauth/revoke-all"><button type="submit" class="secondary">Revoke all OAuth sessions</button></form>'}</section>
  <section class="card" style="margin-bottom:20px"><h2>Match experience to a job description</h2><p class="muted">Paste a job description to rank verified experience and projects without paid AI calls. Nothing is saved.</p><form method="post" action="/ui/job-match"><label>Job description</label><textarea name="job_description" required minlength="15" maxlength="12000" placeholder="Paste the role requirements here"></textarea><p><button>Find matching experience</button></p></form></section>
  <section class="search card"><h2>Search verified memories</h2><form action="/" method="get" class="row"><input name="q" placeholder="Try Python, Slack, PostgreSQL or a job requirement" value="${e(q)}" maxlength="200"><button>Search</button></form></section>
  <div class="grid"><section class="card"><div class="row spaced"><h2>Verified memories (${memories.length})</h2><span class="tag">Approved</span></div>${memoryList}</section>
@@ -89,6 +91,16 @@ export async function handleUi(request:Request,env:Env,internal:InternalApi,acce
  }
  if(method==='POST'&&!validFormOrigin(request))return simpleError('Origin validation failed',403);
  if(path==='/logout'&&method==='POST')return env.ACCESS_REQUIRED==='true'?redirect('/cdn-cgi/access/logout'):redirect('/',removeSessionHeaders);
+ if(path==='/ui/oauth/revoke-all'&&method==='POST'){
+   // Reuse the OAuth handler's signed-owner-session and origin checks.
+   // Cloudflare Access identity alone is not a substitute for OAuth owner consent.
+   if(accessAuthorized)return simpleError('Owner-key session required',403);
+   const revokeRequest=new Request(new URL('/oauth/owner/revoke-all',request.url),{
+     method:'POST',headers:request.headers
+   });
+   const result=await handleOAuth(revokeRequest,env);
+   return result?.ok?redirect('/'):simpleError('OAuth sessions could not be revoked',result?.status||500);
+ }
  if(path==='/export'&&method==='GET'){
    try{
      const [memories,revisions,proposals]=await Promise.all([
