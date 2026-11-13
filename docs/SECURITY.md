@@ -5,6 +5,7 @@ The repository is **public code only**. Personal memories and credentials stay i
 ## Implemented controls
 
 - Protected API calls require strong Bearer credentials; missing or placeholder owner tokens fail closed.
+- REST JSON responses include no-store caching, no-referrer, nosniff, deny-framing, and a restrictive CSP; browser HTML and OAuth responses have their own policies.
 - Owner and agent roles are distinct. MCP permits three read-only retrieval tools and **two proposal-only** write operations. Agents cannot approve or modify trusted memories.
 - The browser uses signed, 12-hour, HttpOnly, Secure, SameSite=Strict cookies and checks POST origins.
 - Optional Cloudflare Access Email OTP implementation checks a trusted Cloudflare identity and exact allowed email, but the Access policy is not active yet.
