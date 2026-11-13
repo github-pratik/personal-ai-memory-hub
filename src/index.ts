@@ -8,7 +8,7 @@ import { authorized, safeLimit, validateMemoryInput, validId } from './domain';
 interface Env { DB: D1Database; MEMORY_API_TOKEN: string; MEMORY_AGENT_TOKEN?: string; ACCESS_REQUIRED?: string; ACCESS_ALLOWED_EMAIL?: string }
 type Role = 'owner' | 'agent';
 const json = (data:unknown, status=200) => new Response(JSON.stringify(data), {
-  status, headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}
+  status, headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','x-frame-options':'DENY','content-security-policy':"default-src 'none'; frame-ancestors 'none'"}
 });
 const err=(message:string,status:number)=>json({error:message},status);
 const now=()=>new Date().toISOString();
