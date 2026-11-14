@@ -115,12 +115,16 @@ export async function handleOAuth(request:Request,env:Env):Promise<Response|null
   catch{return fail('invalid_client_metadata','Invalid JSON')}
   if(!validClientInput(data)){oauthAudit('register_rejected',{reason:'invalid_client_metadata'});return fail('invalid_client_metadata','Invalid public client registration');}
   const name=(data.client_name||'Unverified MCP client').trim()||'Unverified MCP client',id=crypto.randomUUID();
-  // Enforce the public registration cap in the same SQL statement as the write.
-  // Separate COUNT + INSERT requests can race and exhaust free-tier storage.
+  // Bound both total registrations and new registrations per hour in one
+  // conditional INSERT. This global limit avoids trusting spoofable client IP
+  // headers and keeps D1 usage bounded without a paid rate-limit service.
+  const createdAt=new Date().toISOString();
+  const hourAgo=new Date(Date.now()-60*60*1000).toISOString();
   const inserted=await env.DB.prepare(`INSERT INTO oauth_clients (id,name,redirect_uris,created_at)
-    SELECT ?,?,?,? WHERE (SELECT COUNT(*) FROM oauth_clients) < 100`)
-   .bind(id,name,JSON.stringify(data.redirect_uris),new Date().toISOString()).run();
-  if(inserted.meta.changes!==1)return fail('invalid_client_metadata','Client registration quota reached',429);
+    SELECT ?,?,?,? WHERE (SELECT COUNT(*) FROM oauth_clients) < 100
+    AND (SELECT COUNT(*) FROM oauth_clients WHERE created_at >= ?) < 10`)
+   .bind(id,name,JSON.stringify(data.redirect_uris),createdAt,hourAgo).run();
+  if(inserted.meta.changes!==1)return fail('invalid_client_metadata','Client registration limit reached; retry later or ask the owner to review clients',429);
   oauthAudit('register_succeeded',{client:'registered',callback:callbackPath(data.redirect_uris[0])});
   return json({client_id:id,client_name:name,redirect_uris:data.redirect_uris,token_endpoint_auth_method:'none',
    grant_types:['authorization_code'],response_types:['code']},201);
