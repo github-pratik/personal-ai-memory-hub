@@ -49,6 +49,15 @@ function validClientInput(obj:unknown):obj is {client_name?:string;redirect_uris
   (p.grant_types===undefined||(Array.isArray(p.grant_types)&&p.grant_types.length===1&&p.grant_types[0]==='authorization_code')) &&
   (p.response_types===undefined||(Array.isArray(p.response_types)&&p.response_types.length===1&&p.response_types[0]==='code'));
 }
+// Bound unauthenticated form parsing before Request.formData() allocates memory.
+// Content-Length is only a fast precheck; the actual body limit is authoritative.
+async function boundedForm(request:Request,maxBytes=5000):Promise<FormData|null>{
+ const length=Number(request.headers.get('content-length'));
+ if(Number.isFinite(length)&&length>maxBytes)return null;
+ const raw=await request.text();
+ if(new TextEncoder().encode(raw).length>maxBytes)return null;
+ return new Request(request.url,{method:'POST',headers:{'content-type':request.headers.get('content-type')||''},body:raw}).formData();
+}
 const now=()=>Math.floor(Date.now()/1000);
 async function clientFor(env:Env,id:string):Promise<Client|null>{
  if(id===GROK_CLIENT_ID)return {id,name:'Grok',redirect_uris:JSON.stringify(GROK_CALLBACKS)};
@@ -141,7 +150,8 @@ export async function handleOAuth(request:Request,env:Env):Promise<Response|null
    if(!await verifySession(getCookie(request.headers.get('cookie'),COOKIE_NAME),env.MEMORY_API_TOKEN))return fail('access_denied','Owner sign-in required',403);
    const p=await authorizeParams(request,env,url.searchParams);
    if(!p)return fail('invalid_request','Invalid authorization parameters');
-   const form=await request.formData();if(form.get('decision')!=='approve')return redirect(appendAuthError(p,'access_denied',base));
+   const form=await boundedForm(request);if(!form)return fail('invalid_request','Request too large',413);
+   if(form.get('decision')!=='approve')return redirect(appendAuthError(p,'access_denied',base));
    oauthAudit('consent_approved',{client:clientKind(p.client_id),callback:callbackPath(p.redirect_uri)});
    const code=random(),codeHash=await digest(code);
    await env.DB.prepare('INSERT INTO oauth_codes (code_hash,client_id,redirect_uri,code_challenge,resource,scopes,expires_at) VALUES (?,?,?,?,?,?,?)')
@@ -155,7 +165,8 @@ export async function handleOAuth(request:Request,env:Env):Promise<Response|null
  if(path==='/oauth/login'){
   if(method!=='POST')return fail('invalid_request','Unsupported method',405);
   if(!validFormOrigin(request))return fail('invalid_request','Invalid form origin',403);
-  const form=await request.formData(),params=String(form.get('params')||'');
+  const form=await boundedForm(request);if(!form)return fail('invalid_request','Request too large',413);
+  const params=String(form.get('params')||'');
   if(params.length>4000)return fail('invalid_request','Invalid sign-in request');
   const target=new URL('/oauth/authorize?'+params,base);
   const p=await authorizeParams(request,env,target.searchParams);
