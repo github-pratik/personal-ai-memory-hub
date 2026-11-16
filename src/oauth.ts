@@ -49,13 +49,32 @@ function validClientInput(obj:unknown):obj is {client_name?:string;redirect_uris
   (p.grant_types===undefined||(Array.isArray(p.grant_types)&&p.grant_types.length===1&&p.grant_types[0]==='authorization_code')) &&
   (p.response_types===undefined||(Array.isArray(p.response_types)&&p.response_types.length===1&&p.response_types[0]==='code'));
 }
-// Bound unauthenticated form parsing before Request.formData() allocates memory.
-// Content-Length is only a fast precheck; the actual body limit is authoritative.
+// Read no more than the allowed bytes from public, unauthenticated requests.
+// Request.text() alone can buffer an arbitrarily large body before checking size.
+async function boundedBody(request:Request,maxBytes:number):Promise<string|null>{
+ const declared=request.headers.get('content-length');
+ if(declared!==null && Number(declared)>maxBytes)return null;
+ if(!request.body)return '';
+ const reader=request.body.getReader();
+ const chunks:Uint8Array[]=[];
+ let size=0;
+ try{
+  while(true){
+   const {done,value}=await reader.read();
+   if(done)break;
+   size+=value.byteLength;
+   if(size>maxBytes){await reader.cancel();return null;}
+   chunks.push(value);
+  }
+ }finally{reader.releaseLock();}
+ const bytes=new Uint8Array(size);
+ let offset=0;
+ for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
+ return new TextDecoder().decode(bytes);
+}
 async function boundedForm(request:Request,maxBytes=5000):Promise<FormData|null>{
- const length=Number(request.headers.get('content-length'));
- if(Number.isFinite(length)&&length>maxBytes)return null;
- const raw=await request.text();
- if(new TextEncoder().encode(raw).length>maxBytes)return null;
+ const raw=await boundedBody(request,maxBytes);
+ if(raw===null)return null;
  return new Request(request.url,{method:'POST',headers:{'content-type':request.headers.get('content-type')||''},body:raw}).formData();
 }
 const now=()=>Math.floor(Date.now()/1000);
@@ -120,7 +139,7 @@ export async function handleOAuth(request:Request,env:Env):Promise<Response|null
  if(path==='/oauth/register'){
   if(method!=='POST')return fail('invalid_request','Only POST supported',405);
   let data:unknown;
-  try{const raw=await request.text();if(raw.length>5000)return fail('invalid_client_metadata','Request too large',413);data=JSON.parse(raw)}
+  try{const raw=await boundedBody(request,5000);if(raw===null)return fail('invalid_client_metadata','Request too large',413);data=JSON.parse(raw)}
   catch{return fail('invalid_client_metadata','Invalid JSON')}
   if(!validClientInput(data)){oauthAudit('register_rejected',{reason:'invalid_client_metadata'});return fail('invalid_client_metadata','Invalid public client registration');}
   const name=(data.client_name||'Unverified MCP client').trim()||'Unverified MCP client',id=crypto.randomUUID();
@@ -196,8 +215,8 @@ export async function handleOAuth(request:Request,env:Env):Promise<Response|null
   if(method!=='POST')return fail('invalid_request','Unsupported method',405);
   if(!(request.headers.get('content-type')||'').includes('application/x-www-form-urlencoded'))
    return fail('invalid_request','Form-encoded request required',415);
-  const raw=await request.text();
-  if(raw.length>4000)return fail('invalid_request','Request too large',413);
+  const raw=await boundedBody(request,4000);
+  if(raw===null)return fail('invalid_request','Request too large',413);
   const form=new URLSearchParams(raw),token=form.get('token')||'',clientId=form.get('client_id')||'';
   if(!clientId||!await clientFor(env,clientId))return fail('invalid_client','Unknown client',401);
   if(/^[A-Za-z0-9_-]{35,150}$/.test(token)){
@@ -210,7 +229,7 @@ export async function handleOAuth(request:Request,env:Env):Promise<Response|null
  if(path==='/oauth/token'){
   if(method!=='POST')return fail('invalid_request','Unsupported method',405);
   if(!(request.headers.get('content-type')||'').includes('application/x-www-form-urlencoded'))return fail('invalid_request','Form-encoded request required',415);
-  const raw=await request.text();if(raw.length>4000)return fail('invalid_request','Request too large',413);
+  const raw=await boundedBody(request,4000);if(raw===null)return fail('invalid_request','Request too large',413);
   const form=new URLSearchParams(raw);
   if(form.get('grant_type')!=='authorization_code')return fail('unsupported_grant_type','Only authorization_code is supported');
   const client_id=form.get('client_id')||'',code=form.get('code')||'',verifier=form.get('code_verifier')||'',redirectUri=form.get('redirect_uri')||'',resource=form.get('resource')||'';
