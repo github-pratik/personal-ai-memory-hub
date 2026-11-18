@@ -190,6 +190,18 @@ export async function handleOAuth(request:Request,env:Env):Promise<Response|null
   const target=new URL('/oauth/authorize?'+params,base);
   const p=await authorizeParams(request,env,target.searchParams);
   if(!p)return fail('invalid_request','Invalid authorization parameters');
+  // Global, fixed-size D1 counter: avoid trusting spoofable IP headers. The
+  // conditional upsert is atomic, including concurrent requests. The window
+  // resets after ten minutes; all attempts count to avoid oracle behavior.
+  const windowStart=now();
+  const attempt=await env.DB.prepare(`INSERT INTO oauth_login_limits (name,window_start,attempts)
+    VALUES ('owner_login',?,1)
+    ON CONFLICT(name) DO UPDATE SET
+      window_start=CASE WHEN window_start <= excluded.window_start-600 THEN excluded.window_start ELSE window_start END,
+      attempts=CASE WHEN window_start <= excluded.window_start-600 THEN 1 ELSE attempts+1 END
+    WHERE window_start <= excluded.window_start-600 OR attempts < 20`)
+   .bind(windowStart).run();
+  if(attempt.meta.changes!==1)return fail('slow_down','Too many sign-in attempts; retry after ten minutes',429);
   const key=String(form.get('secret')||'');
   if(!authorized('Bearer '+key,env.MEMORY_API_TOKEN))return html('<h2>Sign-in failed</h2><p>Invalid owner access key.</p>');
   oauthAudit('owner_login_succeeded',{client:clientKind(p.client_id)});
