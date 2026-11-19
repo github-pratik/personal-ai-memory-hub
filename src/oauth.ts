@@ -242,6 +242,18 @@ export async function handleOAuth(request:Request,env:Env):Promise<Response|null
   if(method!=='POST')return fail('invalid_request','Unsupported method',405);
   if(!(request.headers.get('content-type')||'').includes('application/x-www-form-urlencoded'))return fail('invalid_request','Form-encoded request required',415);
   const raw=await boundedBody(request,4000);if(raw===null)return fail('invalid_request','Request too large',413);
+  // A single bounded D1 counter protects token exchange from repeated invalid
+  // requests without trusting attacker-controlled client identifiers or IPs.
+  // This shares the migration-backed table with owner login, but uses its own row.
+  const exchangeAt=now();
+  const exchange=await env.DB.prepare(`INSERT INTO oauth_login_limits (name,window_start,attempts)
+    VALUES ('token_exchange',?,1)
+    ON CONFLICT(name) DO UPDATE SET
+      window_start=CASE WHEN window_start <= excluded.window_start-600 THEN excluded.window_start ELSE window_start END,
+      attempts=CASE WHEN window_start <= excluded.window_start-600 THEN 1 ELSE attempts+1 END
+    WHERE window_start <= excluded.window_start-600 OR attempts < 100`)
+   .bind(exchangeAt).run();
+  if(exchange.meta.changes!==1)return fail('slow_down','Too many token requests; retry later',429);
   const form=new URLSearchParams(raw);
   if(form.get('grant_type')!=='authorization_code')return fail('unsupported_grant_type','Only authorization_code is supported');
   const client_id=form.get('client_id')||'',code=form.get('code')||'',verifier=form.get('code_verifier')||'',redirectUri=form.get('redirect_uri')||'',resource=form.get('resource')||'';
