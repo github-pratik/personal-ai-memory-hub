@@ -5,18 +5,20 @@ import { handleOAuth } from '../src/oauth';
 function fakeDb(changes:number) {
   let sql='';
   let args:unknown[]=[];
+  let throttleSql='';
+  let throttleCalls=0;
   const DB={
     prepare(query:string) {
-      sql=query;
+      if(query.includes("VALUES ('client_registration'")){throttleSql=query;throttleCalls++;}else{sql=query;}
       return {
         bind(...values:unknown[]) {
-          args=values;
+          if(!query.includes("VALUES ('client_registration'"))args=values;
           return {run:async()=>({meta:{changes}})};
         }
       };
     }
   } as unknown as D1Database;
-  return {DB,statement:()=>sql,bindings:()=>args};
+  return {DB,statement:()=>sql,bindings:()=>args,throttleSql:()=>throttleSql,throttleCalls:()=>throttleCalls};
 }
 
 const registration={
@@ -70,4 +72,27 @@ test('registration window is anchored one hour before creation',async()=>{
   assert.ok(created>=before && created<=after);
   assert.ok(cutoff>=before-3600000 && cutoff<=after-3600000);
   assert.equal(created-cutoff,3600000);
+});
+
+test('invalid registration metadata still consumes the D1 request quota',async()=>{
+  const db=fakeDb(1);
+  const response=await handleOAuth(new Request('https://hub.example/oauth/register',{
+    method:'POST',headers:{'content-type':'application/json'},body:'{"redirect_uris":[]}'
+  }),{DB:db.DB,MEMORY_API_TOKEN:'test-owner-secret'});
+  assert.equal(response?.status,400);
+  assert.equal(db.throttleCalls(),1);
+  assert.match(db.throttleSql(),/VALUES \('client_registration',\?,1\)/);
+  assert.match(db.throttleSql(),/ON CONFLICT\(name\) DO UPDATE/);
+  assert.match(db.throttleSql(),/attempts < 100/);
+});
+
+test('registration request quota rejects before parsing client metadata',async()=>{
+  const db=fakeDb(0);
+  const response=await handleOAuth(new Request('https://hub.example/oauth/register',{
+    method:'POST',headers:{'content-type':'application/json'},body:'not-json'
+  }),{DB:db.DB,MEMORY_API_TOKEN:'test-owner-secret'});
+  assert.equal(response?.status,429);
+  assert.equal(db.throttleCalls(),1);
+  assert.equal(db.statement(),'');
+  assert.equal((await response?.json() as {error:string}).error,'slow_down');
 });
