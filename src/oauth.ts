@@ -141,6 +141,8 @@ export async function handleOAuth(request:Request,env:Env):Promise<Response|null
   // Count even invalid JSON and invalid client metadata. The existing successful-
   // registration quota alone cannot stop repeated rejected requests.
   // A global D1 counter avoids trusting spoofable client IP headers.
+  const rawRegistration=await boundedBody(request,5000);
+  if(rawRegistration===null)return fail('invalid_client_metadata','Request too large',413);
   const registrationAt=now();
   const registrationAttempt=await env.DB.prepare(`INSERT INTO oauth_login_limits (name,window_start,attempts)
     VALUES ('client_registration',?,1)
@@ -151,7 +153,7 @@ export async function handleOAuth(request:Request,env:Env):Promise<Response|null
    .bind(registrationAt).run();
   if(registrationAttempt.meta.changes!==1)return fail('slow_down','Too many registration requests; retry later',429);
   let data:unknown;
-  try{const raw=await boundedBody(request,5000);if(raw===null)return fail('invalid_client_metadata','Request too large',413);data=JSON.parse(raw)}
+  try{data=JSON.parse(rawRegistration)}
   catch{return fail('invalid_client_metadata','Invalid JSON')}
   if(!validClientInput(data)){oauthAudit('register_rejected',{reason:'invalid_client_metadata'});return fail('invalid_client_metadata','Invalid public client registration');}
   const name=(data.client_name||'Unverified MCP client').trim()||'Unverified MCP client',id=crypto.randomUUID();
