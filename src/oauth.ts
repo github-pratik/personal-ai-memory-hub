@@ -138,6 +138,18 @@ export async function handleOAuth(request:Request,env:Env):Promise<Response|null
  }
  if(path==='/oauth/register'){
   if(method!=='POST')return fail('invalid_request','Only POST supported',405);
+  // Count even invalid JSON and invalid client metadata. The existing successful-
+  // registration quota alone cannot stop repeated rejected requests.
+  // A global D1 counter avoids trusting spoofable client IP headers.
+  const registrationAt=now();
+  const registrationAttempt=await env.DB.prepare(`INSERT INTO oauth_login_limits (name,window_start,attempts)
+    VALUES ('client_registration',?,1)
+    ON CONFLICT(name) DO UPDATE SET
+      window_start=CASE WHEN window_start <= excluded.window_start-600 THEN excluded.window_start ELSE window_start END,
+      attempts=CASE WHEN window_start <= excluded.window_start-600 THEN 1 ELSE attempts+1 END
+    WHERE window_start <= excluded.window_start-600 OR attempts < 100`)
+   .bind(registrationAt).run();
+  if(registrationAttempt.meta.changes!==1)return fail('slow_down','Too many registration requests; retry later',429);
   let data:unknown;
   try{const raw=await boundedBody(request,5000);if(raw===null)return fail('invalid_client_metadata','Request too large',413);data=JSON.parse(raw)}
   catch{return fail('invalid_client_metadata','Invalid JSON')}
