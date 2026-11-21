@@ -51,7 +51,7 @@ function validClientInput(obj:unknown):obj is {client_name?:string;redirect_uris
 }
 // Read no more than the allowed bytes from public, unauthenticated requests.
 // Request.text() alone can buffer an arbitrarily large body before checking size.
-async function boundedBody(request:Request,maxBytes:number):Promise<string|null>{
+export async function boundedBody(request:Request,maxBytes:number):Promise<string|null>{
  const declared=request.headers.get('content-length');
  if(declared!==null && Number(declared)>maxBytes)return null;
  if(!request.body)return '';
