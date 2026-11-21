@@ -33,3 +33,21 @@ test('rejects overly long search queries before database access',async()=>{
  const response=await worker.fetch(new Request('https://example.test/v1/memories?q='+('x'.repeat(201)),{headers:{authorization:'Bearer '+token}}),env);
  assert.equal(response.status,400);
 });
+
+test('owner JSON writes reject oversized streamed bodies before database access',async()=>{
+ for(const path of ['/v1/memories','/v1/proposals']){
+  const response=await worker.fetch(new Request('https://example.test'+path,{
+   method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},
+   body:new ReadableStream({start(controller){controller.enqueue(new TextEncoder().encode('x'.repeat(16001)));controller.close();}}),duplex:'half'
+  } as RequestInit),env);
+  assert.equal(response.status,400);
+  assert.match((await response.json() as {error:string}).error,/Request too large/);
+ }
+});
+test('owner import rejects oversized streamed body before database access',async()=>{
+ const response=await worker.fetch(new Request('https://example.test/v1/import',{
+  method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},
+  body:new ReadableStream({start(controller){controller.enqueue(new TextEncoder().encode('x'.repeat(150001)));controller.close();}}),duplex:'half'
+ } as RequestInit),env);
+ assert.equal(response.status,413);
+});
