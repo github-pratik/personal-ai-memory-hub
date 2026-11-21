@@ -1,6 +1,6 @@
 import { stableMemoryId, proposalMemoryId } from './import';
 import { handleMcp } from './mcp';
-import { handleOAuth, oauthScopes, oauthChallenge } from './oauth';
+import { handleOAuth, oauthScopes, oauthChallenge, boundedBody } from './oauth';
 import { rankEvidence, type Evidence } from './relevance';
 import { handleUi } from './ui';
 import { authorized, safeLimit, validateMemoryInput, validId } from './domain';
@@ -27,9 +27,8 @@ function allowed(role:Role,method:string,path:string):boolean{
 }
 async function parseJson(request:Request):Promise<unknown>{
   if(!request.headers.get('content-type')?.toLowerCase().includes('application/json'))throw new Error('Content-Type must be application/json');
-  if(Number(request.headers.get('content-length')||0)>16000)throw new Error('Request too large');
-  const text=await request.text();
-  if(text.length>16000)throw new Error('Request too large');
+  const text=await boundedBody(request,16000);
+  if(text===null)throw new Error('Request too large');
   return JSON.parse(text);
 }
 const worker = {
@@ -141,8 +140,8 @@ const worker = {
     if(!env.DB)return err('Database binding missing',503);
     try{
       if(path==='/v1/import' && method==='POST'){
-        const raw=await request.text();
-        if(raw.length>150000)return err('Import too large',413);
+        const raw=await boundedBody(request,150000);
+        if(raw===null)return err('Import too large',413);
         let payload:unknown;
         try{payload=JSON.parse(raw)}catch{return err('Invalid JSON',400)}
         if(!payload||typeof payload!=='object'||Array.isArray(payload))return err('Expected items array',400);
