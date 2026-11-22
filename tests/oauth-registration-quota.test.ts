@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { handleOAuth } from '../src/oauth';
 
-function fakeDb(changes:number) {
+function fakeDb(changes:number, throttleChanges=1) {
   let sql='';
   let args:unknown[]=[];
   let throttleSql='';
@@ -13,7 +13,7 @@ function fakeDb(changes:number) {
       return {
         bind(...values:unknown[]) {
           if(!query.includes("VALUES ('client_registration'"))args=values;
-          return {run:async()=>({meta:{changes}})};
+          return {run:async()=>({meta:{changes:query.includes("VALUES ('client_registration'") ? throttleChanges : changes}})};
         }
       };
     }
