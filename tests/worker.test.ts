@@ -40,7 +40,7 @@ test('owner JSON writes reject oversized streamed bodies before database access'
    method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},
    body:new ReadableStream({start(controller){controller.enqueue(new TextEncoder().encode('x'.repeat(16001)));controller.close();}}),duplex:'half'
   } as RequestInit),env);
-  assert.equal(response.status,400);
+  assert.equal(response.status,413);
   assert.match((await response.json() as {error:string}).error,/Request too large/);
  }
 });
