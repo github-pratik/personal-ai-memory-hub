@@ -87,7 +87,7 @@ test('invalid registration metadata still consumes the D1 request quota',async()
 });
 
 test('registration request quota rejects before parsing client metadata',async()=>{
-  const db=fakeDb(0);
+  const db=fakeDb(0,0);
   const response=await handleOAuth(new Request('https://hub.example/oauth/register',{
     method:'POST',headers:{'content-type':'application/json'},body:'not-json'
   }),{DB:db.DB,MEMORY_API_TOKEN:'test-owner-secret'});
