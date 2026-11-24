@@ -197,6 +197,26 @@ const exportRes=await fetch(base+'/export',{headers:{cookie}});
 assert.equal(exportRes.status,200);
 const backup=await exportRes.json();
 assert.ok(Array.isArray(backup.memories)&&Array.isArray(backup.revisions));
+// Export is owner-only; archived records and pending proposals must not become trusted on import.
+const anonymousExport=await fetch(base+'/export',{redirect:'manual'});
+assert.ok([302,303,401,403].includes(anonymousExport.status));
+const restoreTitle='Synthetic approved-only recovery';
+const mixedBackup={version:1,memories:[
+ {title:restoreTitle,body:'Approved synthetic recovery evidence',category:'project',source:'Synthetic backup',state:'approved'},
+ {title:'Synthetic archived recovery exclusion',body:'Archived synthetic evidence',category:'project',source:'Synthetic backup',state:'archived'},
+ {title:'Synthetic pending recovery exclusion',body:'Unreviewed synthetic evidence',category:'project',source:'Synthetic backup',state:'pending'}
+]};
+for(let attempt=0;attempt<2;attempt++){
+ const form=new FormData();
+ form.set('file',new Blob([JSON.stringify(mixedBackup)],{type:'application/json'}),'backup.json');
+ const response=await fetch(base+'/ui/import',{method:'POST',redirect:'manual',headers:{origin:base,cookie},body:form});
+ assert.equal(response.status,303);
+}
+assert.equal((await request('/v1/memories?q='+encodeURIComponent(restoreTitle))).data.items.length,1);
+for(const title of ['Synthetic archived recovery exclusion','Synthetic pending recovery exclusion']){
+ assert.equal((await request('/v1/memories?q='+encodeURIComponent(title))).data.items.length,0);
+}
+
 // OAuth 2.1 / PKCE security regression: metadata discovery, registration, explicit
 // owner consent, token audience, single-use authorization code, and legacy Bearer.
 const protectedMetadata=await fetch(base+'/.well-known/oauth-protected-resource');
