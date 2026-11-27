@@ -26,3 +26,19 @@ jobs:
           PID=$!
           trap 'kill $PID 2>/dev/null || true' EXIT
           node tests/smoke.mjs || (cat wrangler.log && exit 1)
+
+      - name: Isolated approved-memory backup recovery
+        run: |
+          set -euo pipefail
+          SOURCE=$(mktemp -d)
+          TARGET=$(mktemp -d)
+          SOURCE_PID=
+          TARGET_PID=
+          trap 'kill ${SOURCE_PID:-} ${TARGET_PID:-} 2>/dev/null || true; rm -rf "$SOURCE" "$TARGET"' EXIT
+          npx wrangler d1 migrations apply memory-hub --local --persist-to "$SOURCE"
+          npx wrangler d1 migrations apply memory-hub --local --persist-to "$TARGET"
+          npx wrangler dev --local --persist-to "$SOURCE" --port 8788 --var MEMORY_API_TOKEN:ci_owner_access_key_minimum_40_random_chars_123456 --var MEMORY_AGENT_TOKEN:ci_agent_access_key_minimum_40_random_chars_abcdef > "$SOURCE/worker.log" 2>&1 &
+          SOURCE_PID=$!
+          npx wrangler dev --local --persist-to "$TARGET" --port 8789 --var MEMORY_API_TOKEN:ci_owner_access_key_minimum_40_random_chars_123456 --var MEMORY_AGENT_TOKEN:ci_agent_access_key_minimum_40_random_chars_abcdef > "$TARGET/worker.log" 2>&1 &
+          TARGET_PID=$!
+          node tests/recovery.mjs
